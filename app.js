@@ -111,7 +111,7 @@
         ? "fps=" + fps + ",scale=" + frameW + ":" + frameH + ":force_original_aspect_ratio=decrease,pad=" + frameW + ":" + frameH + ":(ow-iw)/2:(oh-ih)/2"
         : "fps=" + fps + ",scale=" + frameW + ":" + frameH;
       log("Extrayendo fotogramas a " + fps + " FPS…");
-      await ff.run("-i", inputName, "-an", "-vf", vf, "-vsync", "0", "-start_number", "1", "frame_%06d.png");
+      await ff.run("-i", inputName, "-an", "-vf", vf, "-vsync", "0", "-y", "-start_number", "1", "frame_%06d.png");
       const entries = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.png$/.test(n)).sort();
       if (!entries.length) throw new Error("No se extrajeron fotogramas. Prueba con otro formato de vídeo.");
       entries.forEach(n => tempFiles.push(n));
@@ -141,21 +141,23 @@
       const audioFormat = $("audioFormat").value;
       const audioName = "audio/intro." + audioFormat;
       log("Extrayendo audio (" + audioFormat.toUpperCase() + ")…");
+      let actualAudio = "intro_audio." + audioFormat;
       try {
-        if (audioFormat === "mp3") {
-          await ff.run("-i", inputName, "-vn", "-map", "0:a:0", "-codec:a", "libmp3lame", "-q:a", "3", "-y", "intro_audio.mp3");
+        if (audioFormat === "ogg") {
+          await ff.run("-i", inputName, "-vn", "-map", "0:a:0", "-c:a", "libvorbis", "-q:a", "5", "-y", actualAudio);
         } else {
-          await ff.run("-i", inputName, "-vn", "-map", "0:a:0", "-codec:a", "pcm_s16le", "-y", "intro_audio.wav");
+          await ff.run("-i", inputName, "-vn", "-map", "0:a:0", "-c:a", "pcm_s16le", "-y", actualAudio);
         }
       } catch (err) {
-        if (audioFormat !== "mp3") throw new Error("No se pudo extraer el audio. Comprueba que el vídeo tenga una pista de audio.");
-        log("El codificador MP3 no está disponible; se intentará extraer WAV.");
-        await ff.run("-i", inputName, "-vn", "-map", "0:a:0", "-codec:a", "pcm_s16le", "-y", "intro_audio.wav");
+        if (audioFormat !== "ogg") throw new Error("No se pudo extraer el audio. Comprueba que el vídeo tenga una pista de audio.");
+        log("El codificador OGG no está disponible; se intentará extraer WAV.");
+        actualAudio = "intro_audio.wav";
+        await ff.run("-i", inputName, "-vn", "-map", "0:a:0", "-c:a", "pcm_s16le", "-y", actualAudio);
       }
-      let actualAudio = audioFormat === "mp3" ? "intro_audio.mp3" : "intro_audio.wav";
-      if (audioFormat === "mp3" && !ff.FS("readdir", "/").includes(actualAudio)) actualAudio = "intro_audio.wav";
+      if (!ff.FS("readdir", "/").includes(actualAudio)) throw new Error("FFmpeg no generó el archivo de audio esperado.");
       const audioData = ff.FS("readFile", actualAudio);
-      zip.file(actualAudio.endsWith(".mp3") ? audioName : "audio/intro.wav", audioData, { binary: true, compression: "STORE" });
+      const finalAudioPath = actualAudio.endsWith(".ogg") ? "audio/intro.ogg" : "audio/intro.wav";
+      zip.file(finalAudioPath, audioData, { binary: true, compression: "STORE" });
       tempFiles.push(actualAudio);
       setProgress(85, "Creando manifiesto y paquete…");
 
@@ -172,7 +174,7 @@
           replayPolicy: $("replay").value,
           durationSeconds: duration,
           fps: fps,
-          audioPath: actualAudio.endsWith(".mp3") ? "audio/intro.mp3" : "audio/intro.wav"
+          audioPath: actualAudio.endsWith(".ogg") ? "audio/intro.ogg" : "audio/intro.wav"
         },
         spritesheets: {
           frameWidth: frameW, frameHeight: frameH, columns: cols, rows: rows,
