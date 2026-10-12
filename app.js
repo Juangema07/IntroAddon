@@ -29,6 +29,7 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
   function acceptFile(file) {
     if (!file) return;
     state.file = file;
+    state.duration = 0; state.sourceWidth = 0; state.sourceHeight = 0;
     state.outputBlob = null;
     state.assetBlob = null;
     $("downloadAgain").classList.add("hidden");
@@ -318,6 +319,7 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
         "const CONFIG = " + JSON.stringify(config) + ";",
         'const SOUND_ID = "introaddon:cinematic_intro";',
         'let menuShown = false;',
+        'let modeSelected = false;',
         'let playbackMode = "per_player";',
         'let minimumPlayers = 2;',
         'let groupSoundStarted = false;',
@@ -330,6 +332,7 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
         '    const result = await form.show(player);',
         '    if (result.canceled || result.selection === undefined) { menuShown = false; return; }',
         '    playbackMode = result.selection === 0 ? "per_player" : "group_once";',
+        '    modeSelected = true;',
         '    if (playbackMode === "group_once") {',
         '      const settings = new ModalFormData().title("Intro grupal").slider("Jugadores necesarios para iniciar", 1, 20, 1, 2);',
         '      const answer = await settings.show(player);',
@@ -340,7 +343,7 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
         '    else { const runId = system.runInterval(() => { const players = world.getAllPlayers(); if (!groupSoundStarted && players.length >= minimumPlayers) { groupSoundStarted = true; system.clearRun(runId); for (const p of players) playIntroSound(p); } }, 20); }',
         '  } catch (e) { menuShown = false; try { player.sendMessage("IntroAddon: no se pudo abrir el menú. Comprueba que el pack de scripts esté activo."); } catch (_) {} }',
         '}',
-        'world.afterEvents.playerSpawn.subscribe((event) => { if (!event.initialSpawn) return; const player = event.player; system.runTimeout(() => { if (!menuShown) showFirstPlayerMenu(player); }, 20); });'
+        'world.afterEvents.playerSpawn.subscribe((event) => { if (!event.initialSpawn) return; const player = event.player; system.runTimeout(() => { if (!menuShown) showFirstPlayerMenu(player); else if (modeSelected && playbackMode === "per_player") playIntroSound(player); }, 20); });'
       ];
       bpZip.file("scripts/main.js", scriptLines.join("\n"));
       bpZip.file("introaddon_config.json", JSON.stringify(config, null, 2));
