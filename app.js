@@ -167,6 +167,7 @@
       log("Fotogramas extraídos: " + entries.length);
       setProgress(70, "Montando spritesheets…");
       const zip = new JSZip();
+      zip.file("audio/intro.ogg", audioData, { binary: true, compression: "STORE" });
       const sheetMeta = [];
       const totalSheets = Math.ceil(entries.length / capacity);
       for (let s = 0; s < totalSheets; s++) {
@@ -187,21 +188,24 @@
         setProgress(70 + ((s + 1) / totalSheets) * 12, "Montando spritesheet " + (s + 1) + " de " + totalSheets + "…");
       }
 
-      const audioFormat = "ogg";
-      log("Extrayendo audio OGG…");
+      // Procesar el audio antes de generar miles de PNG reduce el riesgo de quedarnos sin memoria.
+      log("Extrayendo audio OGG (Vorbis, 44.1 kHz)…");
+      state.ffmpegMessages = [];
       const actualAudio = "intro_audio.ogg";
+      let audioData;
       try {
         await ff.run("-i", inputName, "-map", "0:a:0", "-vn", "-sn", "-dn", "-ac", "2", "-ar", "44100", "-c:a", "libvorbis", "-q:a", "5", "-f", "ogg", "-y", actualAudio);
+        if (!ff.FS("readdir", "/").includes(actualAudio)) throw new Error("FFmpeg terminó sin crear intro_audio.ogg.");
+        audioData = ff.FS("readFile", actualAudio);
+        if (!audioData || audioData.length < 64) throw new Error("El archivo OGG generado está vacío o incompleto.");
+        tempFiles.push(actualAudio);
+        log("Audio OGG extraído: " + (audioData.length / 1024 / 1024).toFixed(2) + " MB.");
       } catch (err) {
         const detail = (state.ffmpegMessages || []).slice(-8).join(" | ");
-        throw new Error("Falló la extracción OGG. " + (detail ? "Detalle de FFmpeg: " + detail : "FFmpeg no devolvió el motivo; revisa si el códec de audio es compatible o si faltó memoria.") + " Comprueba que el vídeo tenga audio y vuelve a intentarlo.");
+        const reason = err && err.message ? err.message : String(err);
+        throw new Error("Falló la extracción OGG antes de procesar los fotogramas. " + reason + (detail ? " · FFmpeg: " + detail : " · FFmpeg no informó la causa; puede ser un códec no compatible o falta de memoria."));
       }
-      if (!ff.FS("readdir", "/").includes(actualAudio)) throw new Error("FFmpeg no generó el archivo de audio esperado.");
-      const audioData = ff.FS("readFile", actualAudio);
-      const finalAudioPath = actualAudio.endsWith(".ogg") ? "audio/intro.ogg" : "audio/intro.wav";
-      zip.file(finalAudioPath, audioData, { binary: true, compression: "STORE" });
-      tempFiles.push(actualAudio);
-      setProgress(85, "Creando manifiesto y paquete…");
+
 
       const duration = state.duration || entries.length / fps;
       const config = {
