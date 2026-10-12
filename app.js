@@ -176,52 +176,78 @@
       const vf = keepAspect
         ? "fps=" + fps + ",scale=" + frameW + ":" + frameH + ":force_original_aspect_ratio=decrease,pad=" + frameW + ":" + frameH + ":(ow-iw)/2:(oh-ih)/2"
         : "fps=" + fps + ",scale=" + frameW + ":" + frameH;
-      // Los PNG intermedios sin comprimir consumen mucha memoria en FFmpeg.wasm.
-      // Extraer como JPEG reduce drásticamente el uso de MEMFS; los spritesheets finales siguen siendo PNG.
-      log("Extrayendo fotogramas a " + fps + " FPS en JPEG temporal de bajo peso…");
-      try {
-        await ff.run("-i", inputName, "-an", "-vf", vf, "-vsync", "0", "-q:v", "5", "-f", "image2", "-y", "-start_number", "1", "frame_%06d.jpg");
-      } catch (err) {
-        const detail = (state.ffmpegMessages || []).slice(-8).join(" | ");
-        const reason = err && err.message ? err.message : String(err);
-        throw new Error("FFmpeg no pudo completar la extracción de fotogramas. " + reason + (detail ? " · FFmpeg: " + detail : " · El vídeo puede ser demasiado pesado para la memoria disponible."));
+      const duration = state.duration || 0;
+      if (!Number.isFinite(duration) || duration <= 0) {
+        throw new Error("No se pudo detectar la duración del vídeo. Vuelve a seleccionarlo y espera a que aparezcan sus dimensiones y duración antes de generar.");
       }
-      const entries = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n)).sort();
-      if (!entries.length) throw new Error("FFmpeg no generó fotogramas JPEG. Prueba con otro formato de vídeo.");
-      entries.forEach(n => tempFiles.push(n));
-      log("Fotogramas extraídos: " + entries.length + " (JPEG temporal; spritesheets finales PNG).");
-      setProgress(70, "Montando spritesheets…");
+
+      // No extraer el vídeo completo de una vez: FFmpeg.wasm conserva sus archivos en MEMFS.
+      // Se procesan segmentos cortos y se eliminan sus JPEG tras incorporarlos a las hojas.
+      const chunkSeconds = 8;
+      const totalChunks = Math.ceil(duration / chunkSeconds);
+      const sheetMeta = [];
+      let totalFrames = 0;
+      let sheetFrames = [];
+      let sheetIndex = 0;
       const zip = new JSZip();
       zip.file("audio/intro.ogg", audioData, { binary: true, compression: "STORE" });
-      const sheetMeta = [];
-      const totalSheets = Math.ceil(entries.length / capacity);
-      for (let s = 0; s < totalSheets; s++) {
-        const batch = entries.slice(s * capacity, (s + 1) * capacity);
-        const images = [];
+      const flushSheet = async () => {
+        if (!sheetFrames.length) return;
+        const meta = await makeSheet(sheetFrames, frameW, frameH, cols, rows, imageFormat, ++sheetIndex, zip);
+        sheetFrames.forEach(img => { if (img.close) img.close(); });
+        sheetFrames = [];
+        sheetMeta.push(meta);
+      };
+
+      log("Extrayendo fotogramas a " + fps + " FPS por segmentos de " + chunkSeconds + " segundos…");
+      for (let chunk = 0; chunk < totalChunks; chunk++) {
+        const startTime = chunk * chunkSeconds;
+        const segmentDuration = Math.min(chunkSeconds, duration - startTime);
+        for (const name of ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n))) {
+          try { ff.FS("unlink", name); } catch (_) {}
+        }
+        state.ffmpegMessages = [];
+        try {
+          await ff.run(
+            "-ss", startTime.toFixed(3), "-i", inputName, "-t", segmentDuration.toFixed(3),
+            "-an", "-vf", vf, "-vsync", "0", "-q:v", "5", "-f", "image2",
+            "-y", "-start_number", "1", "frame_%06d.jpg"
+          );
+        } catch (err) {
+          const detail = (state.ffmpegMessages || []).slice(-8).join(" | ");
+          const reason = err && err.message ? err.message : String(err);
+          throw new Error("FFmpeg falló en el segmento " + (chunk + 1) + " de " + totalChunks + ". " + reason +
+            (detail ? " · FFmpeg: " + detail : " · El segmento pudo superar la memoria disponible."));
+        }
+        const batch = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n)).sort();
+        if (!batch.length) log("Aviso: el segmento " + (chunk + 1) + " no produjo fotogramas.");
         for (const name of batch) {
           const data = ff.FS("readFile", name);
-          const url = URL.createObjectURL(new Blob([data], { type: "image/jpeg" }));
+          let img;
           try {
-            const img = await createImageBitmap(await (await fetch(url)).blob());
-            images.push(img);
-          } finally { URL.revokeObjectURL(url); }
-          ff.FS("unlink", name);
+            img = await createImageBitmap(new Blob([data], { type: "image/jpeg" }));
+          } catch (err) {
+            throw new Error("No se pudo abrir un fotograma del segmento " + (chunk + 1) + ": " + (err && err.message ? err.message : String(err)));
+          } finally {
+            try { ff.FS("unlink", name); } catch (_) {}
+          }
+          sheetFrames.push(img);
+          totalFrames++;
+          if (sheetFrames.length >= capacity) await flushSheet();
         }
-        const meta = await makeSheet(images, frameW, frameH, cols, rows, imageFormat, s + 1, zip);
-        images.forEach(img => img.close && img.close());
-        sheetMeta.push(meta);
-        setProgress(70 + ((s + 1) / totalSheets) * 12, "Montando spritesheet " + (s + 1) + " de " + totalSheets + "…");
+        setProgress(68 + ((chunk + 1) / totalChunks) * 14,
+          "Procesando segmento " + (chunk + 1) + " de " + totalChunks + " · " + totalFrames + " fotogramas…");
       }
+      await flushSheet();
+      if (!totalFrames) throw new Error("FFmpeg no generó fotogramas. Prueba con otro vídeo MP4 o revisa su códec.");
+      log("Fotogramas procesados: " + totalFrames + " en " + totalChunks + " segmentos (JPEG temporales; spritesheets finales PNG).");
+      setProgress(82, "Spritesheets preparados…");
 
-
-
-
-      const duration = state.duration || entries.length / fps;
       const config = {
         schemaVersion: 1,
         project: "IntroAddon",
         createdAt: new Date().toISOString(),
-        source: { name: state.file.name, durationSeconds: duration, fps: fps, extractedFrames: entries.length },
+        source: { name: state.file.name, durationSeconds: duration, fps: fps, extractedFrames: totalFrames },
         playback: {
           targetPlatforms: ["Android", "Windows"],
           durationSeconds: duration,
@@ -230,7 +256,7 @@
         },
         spritesheets: {
           frameWidth: frameW, frameHeight: frameH, columns: cols, rows: rows,
-          framesPerSheet: capacity, format: imageFormat, totalFrames: entries.length, sheets: sheetMeta
+          framesPerSheet: capacity, format: imageFormat, totalFrames: totalFrames, sheets: sheetMeta
         },
         note: "Los recursos ya están preparados. Minecraft no debe convertir vídeo ni audio; el reproductor consume las rutas y metadatos de este manifiesto."
       };
@@ -396,7 +422,7 @@
       state.outputName = baseName + ".mcaddon";
       state.assetName = baseName + "_Resources.zip";
       setProgress(100, "Addon generado.");
-      setStatus("Generado: addon .mcaddon con " + entries.length + " fotogramas, " + sheetMeta.length + " spritesheet(s), audio y configuración.", "success");
+      setStatus("Generado: addon .mcaddon con " + totalFrames + " fotogramas, " + sheetMeta.length + " spritesheet(s), audio y configuración.", "success");
       $("downloadAgain").classList.remove("hidden");
       $("downloadAssets").classList.remove("hidden");
       log("Addon generado: " + bytesLabel(addonBlob.size));
