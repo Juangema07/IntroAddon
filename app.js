@@ -135,7 +135,7 @@
     state.busy = true;
     $("generate").disabled = true;
     $("log").textContent = "";
-    log("Versión de procesamiento: fotogramas por segmentos de 8 segundos · build 2026-10-12-b");
+    log("Versión de procesamiento: fotogramas por segmentos de 8 segundos · build 2026-10-12-c");
     $("progressWrap").classList.remove("hidden");
     $("downloadAgain").classList.add("hidden");
     let ff;
@@ -215,10 +215,17 @@
             "-y", "-start_number", "1", "frame_%06d.jpg"
           );
         } catch (err) {
-          const detail = (state.ffmpegMessages || []).slice(-8).join(" | ");
           const reason = err && err.message ? err.message : String(err);
-          throw new Error("FFmpeg falló en el segmento " + (chunk + 1) + " de " + totalChunks + ". " + reason +
-            (detail ? " · FFmpeg: " + detail : " · El segmento pudo superar la memoria disponible."));
+          // Algunas compilaciones de FFmpeg.wasm reportan exit(0) como rechazo aunque
+          // el comando haya terminado bien. Solo se acepta si hay JPEG reales en MEMFS.
+          const completedFiles = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n));
+          if (/Program terminated with exit\\(0\\)/i.test(reason) && completedFiles.length > 0) {
+            log("FFmpeg terminó el segmento " + (chunk + 1) + " con exit(0); se validaron " + completedFiles.length + " fotogramas temporales.");
+          } else {
+            const detail = (state.ffmpegMessages || []).slice(-8).join(" | ");
+            throw new Error("FFmpeg falló en el segmento " + (chunk + 1) + " de " + totalChunks + ". " + reason +
+              (detail ? " · FFmpeg: " + detail : " · No se encontraron fotogramas válidos; revisa el códec y la memoria disponible."));
+          }
         }
         const batch = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n)).sort();
         if (!batch.length) log("Aviso: el segmento " + (chunk + 1) + " no produjo fotogramas.");
