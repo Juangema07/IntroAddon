@@ -135,7 +135,7 @@
     state.busy = true;
     $("generate").disabled = true;
     $("log").textContent = "";
-    log("Versión de procesamiento: extracción continua de fotogramas · build 2026-10-12-f");
+    log("Versión de procesamiento: extracción continua de fotogramas · build 2026-10-12-g");
     $("progressWrap").classList.remove("hidden");
     $("downloadAgain").classList.add("hidden");
     let ff;
@@ -408,7 +408,7 @@
           "introaddon:cinematic_intro": {
             category: "music",
             sounds: [{
-              name: audioPath.replace(/\\.(ogg|wav)$/i, ""),
+              name: audioPath.replace(/\.(ogg|wav)$/i, ""),
               volume: 1.0, pitch: 1.0, stream: true,
               allow_concurrent_streaming: true
             }]
