@@ -1,7 +1,8 @@
+import { FFmpeg } from "https://esm.sh/@ffmpeg/ffmpeg@0.12.10";
+import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
+
 (() => {
   "use strict";
-  import { FFmpeg } from "https://esm.sh/@ffmpeg/ffmpeg@0.12.10";
-  import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
   const $ = (id) => document.getElementById(id);
   const state = { file: null, previewUrl: null, ffmpeg: null, busy: false, outputBlob: null, assetBlob: null, outputName: "IntroAddon_Custom.mcaddon", assetName: "IntroAddon_Resources.zip", duration: 0, sourceWidth: 0, sourceHeight: 0 };
   const setStatus = (message, kind = "") => { $("status").textContent = message; $("status").className = "status" + (kind ? " " + kind : ""); };
