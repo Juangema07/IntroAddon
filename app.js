@@ -340,10 +340,12 @@
           end_event: nextEvent
         };
         const control = {
-          type: "image", texture: "textures/ui/intro/" + texName,
+          type: "image",
+          // El atlas Aseprite se referencia por su ruta base, sin extensión.
+          texture: "textures/ui/intro/" + texName,
           size: ["100%", "100%"], uv_size: [frameW, frameH],
           uv: "@introaddon." + animName, anchor_from: "center", anchor_to: "center",
-          layer: 100 + n, disable_anim_fast_forward: true
+          keep_ratio: true, layer: 100 + n, disable_anim_fast_forward: true
         };
         if (i > 0) {
           const alphaName = "sheet_" + n + "_alpha";
@@ -366,50 +368,85 @@
         }
         uiControls.push({ ["sheet_" + n]: control });
       }
-      const introUi = { namespace: "introaddon", ...uiAnimations, overlay: { type: "panel", size: ["100%", "100%"], controls: uiControls } };
+      // Fondo negro opaco para cubrir el HUD y las franjas fuera de la imagen.
+      const blackCanvas = document.createElement("canvas");
+      blackCanvas.width = 1; blackCanvas.height = 1;
+      const blackContext = blackCanvas.getContext("2d", { alpha: false });
+      if (!blackContext) throw new Error("No se pudo crear el fondo negro de la intro.");
+      blackContext.fillStyle = "#000000"; blackContext.fillRect(0, 0, 1, 1);
+      const blackBlob = await new Promise(resolve => blackCanvas.toBlob(resolve, "image/png"));
+      if (!blackBlob) throw new Error("No se pudo codificar la textura del fondo negro.");
+      rpZip.file("textures/ui/intro/black.png", blackBlob, { binary: true, compression: "STORE" });
+      uiAnimations.black_fade = {
+        anim_type: "alpha", from: 1, to: 0, duration: 0.45,
+        play_event: "introaddon_finish"
+      };
+      uiControls.unshift({ black_background: {
+        type: "image", texture: "textures/ui/intro/black",
+        size: ["100%", "100%"], keep_ratio: false,
+        anchor_from: "center", anchor_to: "center",
+        alpha: "@introaddon.black_fade", layer: 1
+      } });
+      const introUi = {
+        namespace: "introaddon", ...uiAnimations,
+        overlay: { type: "panel", size: ["100%", "100%"], layer: 10000, controls: uiControls }
+      };
       rpZip.file("ui/intro_ui.json", JSON.stringify(introUi, null, 2));
       rpZip.file("ui/_ui_defs.json", JSON.stringify({ ui_defs: ["ui/hud_screen.json", "ui/intro_ui.json"] }, null, 2));
       rpZip.file("ui/hud_screen.json", JSON.stringify({
         namespace: "hud",
-        root_panel: { modifications: [{ array_name: "controls", operation: "insert_front", value: { "introaddon_overlay@introaddon.overlay": {} } }] }
+        root_panel: { modifications: [{
+          array_name: "controls", operation: "insert_front",
+          value: { "introaddon_overlay@introaddon.overlay": { layer: 10000 } }
+        }] }
       }, null, 2));
       const audioPath = actualAudio.endsWith(".ogg") ? "sounds/intro.ogg" : "sounds/intro.wav";
       rpZip.file(audioPath, audioData, { binary: true, compression: "STORE" });
       rpZip.file("sounds/sound_definitions.json", JSON.stringify({
-        "introaddon:cinematic_intro": { category: "music", sounds: [{ name: audioPath.replace(/\.(ogg|wav)$/i, ""), volume: 1.0, pitch: 1.0 }] }
+        format_version: "1.14.0",
+        sound_definitions: {
+          "introaddon:cinematic_intro": {
+            category: "music",
+            sounds: [{
+              name: audioPath.replace(/\\.(ogg|wav)$/i, ""),
+              volume: 1.0, pitch: 1.0, stream: true,
+              allow_concurrent_streaming: true
+            }]
+          }
+        }
       }, null, 2));
-
+      
       const scriptLines = [
         'import { world, system } from "@minecraft/server";',
-        'import { ActionFormData, ModalFormData } from "@minecraft/server-ui";',
+        'import { ModalFormData } from "@minecraft/server-ui";',
         "const CONFIG = " + JSON.stringify(config) + ";",
         'const SOUND_ID = "introaddon:cinematic_intro";',
         'let menuShown = false;',
         'let modeSelected = false;',
         'let playbackMode = "per_player";',
         'let minimumPlayers = 2;',
+        'let soundVolume = 1.0;',
         'let groupSoundStarted = false;',
-        'function playIntroSound(player) { try { player.playSound(SOUND_ID, { volume: 1.0, pitch: 1.0 }); } catch (e) {} }',
+        'function playIntroSound(player) { try { player.playSound(SOUND_ID, { volume: soundVolume, pitch: 1.0 }); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudo reproducir el audio: " + String(e)); } catch (_) {} } }',
+        'function startGroupAudio() { const runId = system.runInterval(() => { const players = world.getAllPlayers(); if (!groupSoundStarted && players.length >= minimumPlayers) { groupSoundStarted = true; system.clearRun(runId); system.runTimeout(() => { for (const p of world.getAllPlayers()) playIntroSound(p); }, 40); } }, 20); }',
         'async function showFirstPlayerMenu(player) {',
         '  if (menuShown) return;',
         '  menuShown = true;',
         '  try {',
-        '    const form = new ActionFormData().title("IntroAddon").body("¿Cómo quieres reproducir la intro en este mundo?").button("Individual - cada jugador al entrar").button("Grupal - una intro para el grupo");',
-        '    const result = await form.show(player);',
-        '    if (result.canceled || result.selection === undefined) { menuShown = false; return; }',
-        '    playbackMode = result.selection === 0 ? "per_player" : "group_once";',
+        '    const form = new ModalFormData().title("IntroAddon - configuración").dropdown("Modo de reproducción", ["Individual - cada jugador al entrar", "Grupal - esperar al grupo"], 0).slider("Volumen de audio (%)", 0, 100, { valueStep: 5, defaultValue: 100 }).slider("Jugadores necesarios (modo grupal)", 1, 20, { valueStep: 1, defaultValue: 2 });',
+        '    const answer = await form.show(player);',
+        '    if (answer.canceled || !answer.formValues) { playbackMode = "per_player"; soundVolume = 1.0; minimumPlayers = 2; modeSelected = true; player.sendMessage("§eIntroAddon: se usarán los valores predeterminados."); system.runTimeout(() => playIntroSound(player), 40); return; }',
+        '    playbackMode = Number(answer.formValues[0]) === 0 ? "per_player" : "group_once";',
+        '    soundVolume = Math.max(0, Math.min(1, Number(answer.formValues[1]) / 100));',
+        '    minimumPlayers = Math.max(1, Math.min(20, Math.floor(Number(answer.formValues[2]) || 2)));',
         '    modeSelected = true;',
-        '    if (playbackMode === "group_once") {',
-        '      const settings = new ModalFormData().title("Intro grupal").slider("Jugadores necesarios para iniciar", 1, 20, { valueStep: 1, defaultValue: 2 });',
-        '      const answer = await settings.show(player);',
-        '      if (!answer.canceled && answer.formValues && Number.isFinite(answer.formValues[0])) minimumPlayers = Math.max(1, Math.floor(answer.formValues[0]));',
-        '    }',
-        '    player.sendMessage(playbackMode === "per_player" ? "§aIntroAddon: modo individual seleccionado." : "§aIntroAddon: modo grupal seleccionado. Jugadores necesarios: " + minimumPlayers);',
-        '    if (playbackMode === "per_player") { playIntroSound(player); }',
-        '    else { const runId = system.runInterval(() => { const players = world.getAllPlayers(); if (!groupSoundStarted && players.length >= minimumPlayers) { groupSoundStarted = true; system.clearRun(runId); for (const p of players) playIntroSound(p); } }, 20); }',
-        '  } catch (e) { menuShown = false; try { player.sendMessage("IntroAddon: no se pudo abrir el menú. Comprueba que el pack de scripts esté activo."); } catch (_) {} }',
+        '    player.sendMessage(playbackMode === "per_player" ? "§aIntroAddon: modo individual. El audio comenzará en breve." : "§aIntroAddon: modo grupal. Esperando a " + minimumPlayers + " jugador(es).");',
+        '    if (playbackMode === "per_player") system.runTimeout(() => playIntroSound(player), 40);',
+        '    else startGroupAudio();',
+        '  } catch (e) { modeSelected = true; playbackMode = "per_player"; soundVolume = 1.0; try { player.sendMessage("§cIntroAddon: no se pudo abrir la configuración; se usará el modo individual. " + String(e)); } catch (_) {} system.runTimeout(() => playIntroSound(player), 40); }',
         '}',
-        'world.afterEvents.playerSpawn.subscribe((event) => { if (!event.initialSpawn) return; const player = event.player; system.runTimeout(() => { if (!menuShown) showFirstPlayerMenu(player); else if (modeSelected && playbackMode === "per_player") playIntroSound(player); }, 1); });'
+        'world.afterEvents.playerSpawn.subscribe((event) => { if (!event.initialSpawn) return; const player = event.player; system.runTimeout(() => { if (!menuShown) showFirstPlayerMenu(player); else if (modeSelected && playbackMode === "per_player") system.runTimeout(() => playIntroSound(player), 40); }, 20); });',
+        'system.runInterval(() => { if (menuShown) return; const players = world.getAllPlayers(); if (players.length > 0) showFirstPlayerMenu(players[0]); }, 40);'
       ];
       bpZip.file("scripts/main.js", scriptLines.join("\n"));
       bpZip.file("introaddon_config.json", JSON.stringify(config, null, 2));
