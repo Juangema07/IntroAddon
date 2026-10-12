@@ -11,7 +11,8 @@ Generador web para preparar una intro de Minecraft Bedrock desde un vídeo local
 - Audio OGG para Bedrock.
 - Generación de un `.mcaddon` con pack de recursos (UI, spritesheets, metadatos Aseprite y audio) y pack de comportamiento (evento de sonido y configuración).
 - ZIP separado con spritesheets, audio y `introaddon_config.json`.
-- Opciones para inicio individual/grupal, mínimo de jugadores y política de repetición.
+- El primer jugador elige individual/grupal dentro del mundo; la web no presenta esas opciones.
+- Resolución, FPS y distribución de hojas recomendados automáticamente según el vídeo.
 
 ## Publicar con GitHub Pages
 
@@ -39,7 +40,7 @@ El repositorio incluye `.github/workflows/pages.yml`.
 - La política de repetición del script afecta al audio; la UI puede reiniciarse cuando el HUD se vuelva a cargar. Debe verificarse en juego antes de usarlo en un mundo principal.
 - El spritesheet está limitado a 4096 px por lado para reducir problemas de compatibilidad y memoria.
 - Si FFmpeg.wasm no puede codificar OGG o el vídeo no contiene audio, la generación se detiene con un error claro.
-- La primera carga requiere conexión para descargar FFmpeg.wasm y JSZip desde CDN.
+- La primera carga requiere conexión para descargar FFmpeg.wasm y JSZip desde CDN. FFmpeg usa el núcleo de un solo hilo para evitar depender de SharedArrayBuffer.
 
 ## Pruebas recomendadas
 
