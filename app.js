@@ -85,6 +85,13 @@
       mainName: "main",
       corePath: "https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js",
       log: true,
+      logger: ({ type, message }) => {
+        if (typeof message !== "string") return;
+        state.ffmpegMessages = state.ffmpegMessages || [];
+        state.ffmpegMessages.push(message);
+        if (state.ffmpegMessages.length > 30) state.ffmpegMessages.shift();
+        if (type === "fferr" && /error|invalid|unknown|failed|not found|no such|stream map|encoder|decoder/i.test(message)) log("FFmpeg: " + message);
+      },
       progress: ({ ratio }) => {
         if (Number.isFinite(ratio)) setProgress(Math.min(68, Math.max(5, ratio * 68)), "Procesando vídeo…");
       }
@@ -184,9 +191,10 @@
       log("Extrayendo audio OGG…");
       const actualAudio = "intro_audio.ogg";
       try {
-        await ff.run("-i", inputName, "-vn", "-map", "0:a:0", "-c:a", "libvorbis", "-q:a", "5", "-y", actualAudio);
+        await ff.run("-i", inputName, "-map", "0:a:0", "-vn", "-sn", "-dn", "-ac", "2", "-ar", "44100", "-c:a", "libvorbis", "-q:a", "5", "-f", "ogg", "-y", actualAudio);
       } catch (err) {
-        throw new Error("No se pudo extraer audio OGG. Comprueba que el vídeo tenga pista de audio e inténtalo con otro archivo.");
+        const detail = (state.ffmpegMessages || []).slice(-8).join(" | ");
+        throw new Error("Falló la extracción OGG. " + (detail ? "Detalle de FFmpeg: " + detail : "FFmpeg no devolvió el motivo; revisa si el códec de audio es compatible o si faltó memoria.") + " Comprueba que el vídeo tenga audio y vuelve a intentarlo.");
       }
       if (!ff.FS("readdir", "/").includes(actualAudio)) throw new Error("FFmpeg no generó el archivo de audio esperado.");
       const audioData = ff.FS("readFile", actualAudio);
