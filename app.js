@@ -176,12 +176,20 @@
       const vf = keepAspect
         ? "fps=" + fps + ",scale=" + frameW + ":" + frameH + ":force_original_aspect_ratio=decrease,pad=" + frameW + ":" + frameH + ":(ow-iw)/2:(oh-ih)/2"
         : "fps=" + fps + ",scale=" + frameW + ":" + frameH;
-      log("Extrayendo fotogramas a " + fps + " FPS…");
-      await ff.run("-i", inputName, "-an", "-vf", vf, "-vsync", "0", "-y", "-start_number", "1", "frame_%06d.png");
-      const entries = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.png$/.test(n)).sort();
-      if (!entries.length) throw new Error("No se extrajeron fotogramas. Prueba con otro formato de vídeo.");
+      // Los PNG intermedios sin comprimir consumen mucha memoria en FFmpeg.wasm.
+      // Extraer como JPEG reduce drásticamente el uso de MEMFS; los spritesheets finales siguen siendo PNG.
+      log("Extrayendo fotogramas a " + fps + " FPS en JPEG temporal de bajo peso…");
+      try {
+        await ff.run("-i", inputName, "-an", "-vf", vf, "-vsync", "0", "-q:v", "5", "-f", "image2", "-y", "-start_number", "1", "frame_%06d.jpg");
+      } catch (err) {
+        const detail = (state.ffmpegMessages || []).slice(-8).join(" | ");
+        const reason = err && err.message ? err.message : String(err);
+        throw new Error("FFmpeg no pudo completar la extracción de fotogramas. " + reason + (detail ? " · FFmpeg: " + detail : " · El vídeo puede ser demasiado pesado para la memoria disponible."));
+      }
+      const entries = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n)).sort();
+      if (!entries.length) throw new Error("FFmpeg no generó fotogramas JPEG. Prueba con otro formato de vídeo.");
       entries.forEach(n => tempFiles.push(n));
-      log("Fotogramas extraídos: " + entries.length);
+      log("Fotogramas extraídos: " + entries.length + " (JPEG temporal; spritesheets finales PNG).");
       setProgress(70, "Montando spritesheets…");
       const zip = new JSZip();
       zip.file("audio/intro.ogg", audioData, { binary: true, compression: "STORE" });
@@ -192,7 +200,7 @@
         const images = [];
         for (const name of batch) {
           const data = ff.FS("readFile", name);
-          const url = URL.createObjectURL(new Blob([data], { type: "image/png" }));
+          const url = URL.createObjectURL(new Blob([data], { type: "image/jpeg" }));
           try {
             const img = await createImageBitmap(await (await fetch(url)).blob());
             images.push(img);
