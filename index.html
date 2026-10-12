@@ -7,9 +7,8 @@
   <meta name="description" content="Prepara spritesheets y audio para intros de Minecraft Bedrock desde tu navegador.">
   <title>IntroAddon Studio</title>
   <link rel="stylesheet" href="styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-  <script defer src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -40,22 +39,22 @@
       <div class="panel">
         <div class="section-heading"><span class="step">02</span><div><h2>Salida visual</h2><p>Define cómo se cortan y agrupan los fotogramas.</p></div></div>
         <div class="field-grid">
-          <label>FPS de extracción
+          <label>FPS recomendados (automático, editable)
             <select id="fps"><option value="12">12 FPS</option><option value="15">15 FPS</option><option value="20">20 FPS</option><option value="24" selected>24 FPS</option><option value="30">30 FPS</option><option value="60">60 FPS</option></select>
           </label>
           <label>Formato de imagen
             <select id="imageFormat"><option value="png" selected>PNG (Bedrock)</option></select>
           </label>
-          <label>Ancho por fotograma
+          <label>Ancho por fotograma (automático)
             <input id="frameWidth" type="number" min="16" max="4096" step="16" value="640">
           </label>
-          <label>Alto por fotograma
+          <label>Alto por fotograma (automático)
             <input id="frameHeight" type="number" min="16" max="4096" step="16" value="360">
           </label>
-          <label>Columnas por hoja
+          <label>Columnas por hoja (automático)
             <input id="columns" type="number" min="1" max="32" value="4">
           </label>
-          <label>Filas por hoja
+          <label>Filas por hoja (automático)
             <input id="rows" type="number" min="1" max="32" value="4">
           </label>
         </div>
@@ -63,23 +62,11 @@
       </div>
 
       <div class="panel">
-        <div class="section-heading"><span class="step">03</span><div><h2>Comportamiento de la intro</h2><p>Estos valores se guardan en la configuración generada.</p></div></div>
-        <div class="field-grid">
-          <label>Inicio en multijugador
-            <select id="playMode"><option value="per_player">Cada jugador al entrar</option><option value="group_once">Una vez para el grupo</option></select>
-          </label>
-          <label>Mínimo de jugadores
-            <input id="minPlayers" type="number" min="1" max="100" value="2">
-          </label>
-          <label>Repetición
-            <select id="replay"><option value="once_per_world">Una vez por jugador y mundo</option><option value="every_join">Cada vez que entra</option><option value="every_session">Una vez por sesión</option></select>
-          </label>
-          <label>Audio
-            <select id="audioFormat"><option value="ogg" selected>OGG (Bedrock)</option></select>
-          </label>
-        </div>
+        <div class="section-heading"><span class="step">03</span><div><h2>Configuración automática</h2><p>Se calcula al cargar el vídeo según su duración y resolución.</p></div></div>
+        <div id="autoConfig" class="status">Sube un vídeo para calcular la resolución recomendada, los FPS y la distribución de hojas.</div>
         <label class="check-row"><input id="keepAspect" type="checkbox" checked> Mantener proporción y rellenar el espacio sobrante</label>
-        <label class="check-row"><input id="includeOriginal" type="checkbox"> Incluir el vídeo original en el paquete (aumenta mucho el tamaño)</label>
+        <label class="check-row"><input id="includeOriginal" type="checkbox"> Incluir el vídeo original en el ZIP de recursos (aumenta mucho el tamaño)</label>
+        <p class="hint">El modo individual/grupal se elige dentro del mundo de Minecraft, no en esta web.</p>
       </div>
 
       <div class="panel output-panel">
