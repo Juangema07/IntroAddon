@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#10151d">
+  <meta name="description" content="Prepara spritesheets y audio para intros de Minecraft Bedrock desde tu navegador.">
+  <title>IntroAddon Studio</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./"><span class="brand-mark">IA</span><span>IntroAddon <small>STUDIO</small></span></a>
+    <span class="privacy"><span class="dot"></span> Procesamiento local</span>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">MINECRAFT BEDROCK · ANDROID + WINDOWS</p>
+      <h1>Tu vídeo.<br><span>Tu intro.</span></h1>
+      <p class="hero-copy">Prepara los fotogramas, extrae el audio y empaqueta los recursos y sus metadatos. Todo desde el navegador.</p>
+    </section>
+
+    <section class="workspace">
+      <div class="panel upload-panel">
+        <div class="section-heading"><span class="step">01</span><div><h2>Vídeo de origen</h2><p>El archivo se procesa en este dispositivo.</p></div></div>
+        <label class="dropzone" id="dropzone" for="videoFile">
+          <span class="upload-icon">↑</span>
+          <strong>Selecciona o arrastra un vídeo</strong>
+          <span>MP4, WebM, MOV y otros formatos admitidos por FFmpeg</span>
+          <input id="videoFile" type="file" accept="video/*,.mkv,.avi">
+        </label>
+        <div id="videoInfo" class="file-info hidden"></div>
+        <video id="preview" class="preview hidden" controls playsinline></video>
+      </div>
+
+      <div class="panel">
+        <div class="section-heading"><span class="step">02</span><div><h2>Salida visual</h2><p>Define cómo se cortan y agrupan los fotogramas.</p></div></div>
+        <div class="field-grid">
+          <label>FPS de extracción
+            <select id="fps"><option value="12">12 FPS</option><option value="15">15 FPS</option><option value="20">20 FPS</option><option value="24" selected>24 FPS</option><option value="30">30 FPS</option><option value="60">60 FPS</option></select>
+          </label>
+          <label>Formato de imagen
+            <select id="imageFormat"><option value="png" selected>PNG</option><option value="jpg">JPG (menor peso)</option></select>
+          </label>
+          <label>Ancho por fotograma
+            <input id="frameWidth" type="number" min="16" max="4096" step="16" value="640">
+          </label>
+          <label>Alto por fotograma
+            <input id="frameHeight" type="number" min="16" max="4096" step="16" value="360">
+          </label>
+          <label>Columnas por hoja
+            <input id="columns" type="number" min="1" max="32" value="4">
+          </label>
+          <label>Filas por hoja
+            <input id="rows" type="number" min="1" max="32" value="4">
+          </label>
+        </div>
+        <p class="hint">Cada hoja tendrá como máximo columnas × filas fotogramas. Si la secuencia es más larga, se crearán hojas adicionales.</p>
+      </div>
+
+      <div class="panel">
+        <div class="section-heading"><span class="step">03</span><div><h2>Comportamiento de la intro</h2><p>Estos valores se guardan en la configuración generada.</p></div></div>
+        <div class="field-grid">
+          <label>Inicio en multijugador
+            <select id="playMode"><option value="per_player">Cada jugador al entrar</option><option value="group_once">Una vez para el grupo</option></select>
+          </label>
+          <label>Mínimo de jugadores
+            <input id="minPlayers" type="number" min="1" max="100" value="2">
+          </label>
+          <label>Repetición
+            <select id="replay"><option value="once_per_world">Una vez por jugador y mundo</option><option value="every_join">Cada vez que entra</option><option value="every_session">Una vez por sesión</option></select>
+          </label>
+          <label>Audio
+            <select id="audioFormat"><option value="mp3" selected>MP3</option><option value="wav">WAV sin compresión</option></select>
+          </label>
+        </div>
+        <label class="check-row"><input id="keepAspect" type="checkbox" checked> Mantener proporción y rellenar el espacio sobrante</label>
+        <label class="check-row"><input id="includeOriginal" type="checkbox"> Incluir el vídeo original en el paquete (aumenta mucho el tamaño)</label>
+      </div>
+
+      <div class="panel output-panel">
+        <div class="section-heading"><span class="step">04</span><div><h2>Generar paquete</h2><p>Se crea un ZIP con recursos y configuración para IntroAddon.</p></div></div>
+        <div class="progress-wrap hidden" id="progressWrap"><div class="progress-label"><span id="progressText">Preparando…</span><span id="progressPercent">0%</span></div><div class="progress-track"><div id="progressBar"></div></div><pre id="log" aria-live="polite"></pre></div>
+        <div id="status" class="status" role="status">Carga un vídeo para comenzar.</div>
+        <button id="generate" class="primary" disabled>Generar paquete <span>→</span></button>
+        <button id="downloadAgain" class="secondary hidden">Descargar paquete generado</button>
+        <p class="footnote">El procesamiento puede consumir bastante memoria con vídeos largos, resoluciones altas o FPS elevados. Puedes reducir cualquiera de esos valores si el dispositivo se queda sin memoria.</p>
+      </div>
+    </section>
+  </main>
+  <footer><span>IntroAddon Studio</span><span>Los vídeos no se envían a un servidor de IntroAddon.</span><a href="https://github.com/Juangema07/IntroAddon">Repositorio en GitHub</a></footer>
+</body>
+</html>
