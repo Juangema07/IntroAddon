@@ -35,17 +35,17 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
     $("downloadAssets").classList.add("hidden");
     if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
     state.previewUrl = URL.createObjectURL(file);
-    $("preview").src = state.previewUrl;
-    $("preview").classList.remove("hidden");
-    $("videoInfo").textContent = file.name + " · " + bytesLabel(file.size) + (file.type ? " · " + file.type : "");
-    $("videoInfo").classList.remove("hidden");
-    $("generate").disabled = false;
     $("preview").onloadedmetadata = () => {
       state.duration = Number.isFinite($("preview").duration) ? $("preview").duration : 0;
       state.sourceWidth = $("preview").videoWidth || 0;
       state.sourceHeight = $("preview").videoHeight || 0;
       autoConfigure();
     };
+    $("preview").src = state.previewUrl;
+    $("preview").classList.remove("hidden");
+    $("videoInfo").textContent = file.name + " · " + bytesLabel(file.size) + (file.type ? " · " + file.type : "");
+    $("videoInfo").classList.remove("hidden");
+    $("generate").disabled = false;
     setStatus("Vídeo listo. Calculando la configuración recomendada…");
   }
 
@@ -68,7 +68,6 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
       (duration ? duration.toFixed(2) + " s" : "duración por detectar") + " · Recomendado: " +
       w + "×" + h + " px, " + fps + " FPS, hojas de " + cols + "×" + rows + " fotogramas.";
   }
-  $("fps").addEventListener("change", autoConfigure);
   $("videoFile").addEventListener("change", e => acceptFile(e.target.files[0]));
   const drop = $("dropzone");
   ["dragenter", "dragover"].forEach(type => drop.addEventListener(type, e => { e.preventDefault(); drop.classList.add("dragging"); }));
