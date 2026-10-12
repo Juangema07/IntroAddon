@@ -225,7 +225,7 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
       }, null, 2));
       bpZip.file("manifest.json", JSON.stringify({
         format_version: 2,
-        header: { name: "IntroAddon Behavior", description: "Audio y configuración de IntroAddon.", uuid: bpUuid, version: [1,0,0], min_engine_version: [1,20,80] },
+        header: { name: "IntroAddon Behavior", description: "Audio y configuración de IntroAddon.", uuid: bpUuid, version: [1,0,0], min_engine_version: [1,21,0] },
         modules: [
           { type: "data", uuid: bpDataUuid, version: [1,0,0] },
           { type: "script", language: "javascript", entry: "scripts/main.js", uuid: bpScriptUuid, version: [1,0,0] }
