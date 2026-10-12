@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const state = { file: null, previewUrl: null, ffmpeg: null, busy: false, outputBlob: null, outputName: "IntroAddon_Custom_Resources.zip" };
+  const state = { file: null, previewUrl: null, ffmpeg: null, busy: false, outputBlob: null, assetBlob: null, outputName: "IntroAddon_Custom.mcaddon", assetName: "IntroAddon_Resources.zip" };
   const ffmpegScript = window.FFmpeg;
   const setStatus = (message, kind = "") => { $("status").textContent = message; $("status").className = "status" + (kind ? " " + kind : ""); };
   const setProgress = (percent, message) => {
@@ -16,6 +16,7 @@
     el.scrollTop = el.scrollHeight;
   };
   const safeName = (name) => name.normalize("NFKD").replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 90) || "intro_video";
+  const makeUuid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 3 | 8)).toString(16); }));
   const bytesLabel = (n) => n < 1024 * 1024 ? (n / 1024).toFixed(1) + " KB" : (n / 1024 / 1024).toFixed(2) + " MB";
   const readNumber = (id, min, max) => {
     const n = Number($(id).value);
@@ -27,7 +28,9 @@
     if (!file) return;
     state.file = file;
     state.outputBlob = null;
+    state.assetBlob = null;
     $("downloadAgain").classList.add("hidden");
+    $("downloadAssets").classList.add("hidden");
     if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
     state.previewUrl = URL.createObjectURL(file);
     $("preview").src = state.previewUrl;
@@ -182,16 +185,145 @@
         },
         note: "Los recursos ya están preparados. Minecraft no debe convertir vídeo ni audio; el reproductor consume las rutas y metadatos de este manifiesto."
       };
+      config.runtime = {
+        addonFormat: "mcaddon",
+        visualPlayback: "Bedrock JSON UI aseprite_flip_book",
+        soundEvent: "introaddon:cinematic_intro",
+        limitations: [
+          "La UI visual comienza cuando carga el HUD de cada cliente.",
+          "El modo grupal espera para iniciar el audio, pero no sincroniza de forma fiable el comienzo visual entre clientes.",
+          "La integración de UI personalizada debe probarse en las versiones objetivo de Bedrock."
+        ]
+      };
       zip.file("introaddon_config.json", JSON.stringify(config, null, 2));
-      zip.file("README.txt", "IntroAddon - paquete de recursos\n\nvideo/: spritesheets preparados.\naudio/: pista de audio extraída.\nintroaddon_config.json: rutas, FPS, dimensiones, duración y opciones de inicio.\n\nEste ZIP es un paquete de recursos/configuración generado, no un .mcaddon instalable por sí solo. La capa de reproducción Bedrock debe integrarlo en el pack de comportamiento y recursos.\n");
+      zip.file("README.txt", "IntroAddon - recursos preparados\\n\\nvideo/: spritesheets.\\naudio/: audio extraído.\\nintroaddon_config.json: rutas, FPS, dimensiones y opciones.\\n");
       if ($("includeOriginal").checked) zip.file("source/" + safeName(state.file.name), state.file, { compression: "STORE" });
-      const blob = await zip.generateAsync({ type: "blob", compression: "STORE" }, meta => setProgress(85 + meta.percent * 0.15, "Empaquetando…"));
-      state.outputBlob = blob;
-      state.outputName = "IntroAddon_" + safeName(state.file.name.replace(/\.[^.]+$/, "")) + "_Resources.zip";
-      setProgress(100, "Paquete listo.");
-      setStatus("Listo: " + entries.length + " fotogramas en " + sheetMeta.length + " spritesheet(s), audio y configuración.", "success");
+
+      setProgress(86, "Construyendo los packs de Minecraft Bedrock…");
+      const rpUuid = makeUuid(), rpModuleUuid = makeUuid(), bpUuid = makeUuid(), bpDataUuid = makeUuid(), bpScriptUuid = makeUuid();
+      const rpZip = new JSZip(), bpZip = new JSZip();
+      rpZip.file("manifest.json", JSON.stringify({
+        format_version: 2,
+        header: { name: "IntroAddon Resources", description: "Recursos cinematográficos generados por IntroAddon Studio.", uuid: rpUuid, version: [1,0,0], min_engine_version: [1,20,80] },
+        modules: [{ type: "resources", uuid: rpModuleUuid, version: [1,0,0] }]
+      }, null, 2));
+      bpZip.file("manifest.json", JSON.stringify({
+        format_version: 2,
+        header: { name: "IntroAddon Behavior", description: "Audio y configuración de IntroAddon.", uuid: bpUuid, version: [1,0,0], min_engine_version: [1,20,80] },
+        modules: [
+          { type: "data", uuid: bpDataUuid, version: [1,0,0] },
+          { type: "script", language: "javascript", entry: "scripts/main.js", uuid: bpScriptUuid, version: [1,0,0] }
+        ],
+        dependencies: [{ uuid: rpUuid, version: [1,0,0] }, { module_name: "@minecraft/server", version: "1.13.0" }]
+      }, null, 2));
+
+      const uiAnimations = {};
+      const uiControls = [];
+      for (let i = 0; i < sheetMeta.length; i++) {
+        const sheet = sheetMeta[i], n = i + 1;
+        const texName = "spritesheet_" + String(n).padStart(3, "0");
+        const animName = "sheet_" + n + "_uv";
+        const startEvent = "introaddon_start_sheet_" + n;
+        const nextEvent = n < sheetMeta.length ? "introaddon_start_sheet_" + (n + 1) : "introaddon_finish";
+        const frames = [];
+        for (let f = 0; f < sheet.frameCount; f++) {
+          frames.push({
+            filename: "frame_" + String((i * capacity) + f + 1).padStart(6, "0") + ".png",
+            frame: { x: (f % cols) * frameW, y: Math.floor(f / cols) * frameH, w: frameW, h: frameH },
+            rotated: false, trimmed: false,
+            spriteSourceSize: { x: 0, y: 0, w: frameW, h: frameH },
+            sourceSize: { w: frameW, h: frameH },
+            duration: Math.max(1, Math.round(1000 / fps))
+          });
+        }
+        const aseprite = {
+          frames,
+          meta: {
+            app: "IntroAddon Studio", version: "1.0", image: texName + ".png", format: "RGBA8888",
+            size: { w: frameW * cols, h: frameH * rows }, scale: "1",
+            frameTags: [{ name: "intro", from: 0, to: sheet.frameCount - 1, direction: "forward" }],
+            layers: [{ name: "Intro", opacity: 255, blendMode: "normal" }], slices: []
+          }
+        };
+        const pngBytes = await zip.file(sheet.filename).async("uint8array");
+        rpZip.file("textures/ui/intro/" + texName + ".png", pngBytes, { binary: true, compression: "STORE" });
+        rpZip.file("textures/ui/intro/" + texName + ".json", JSON.stringify(aseprite, null, 2));
+        uiAnimations[animName] = {
+          anim_type: "aseprite_flip_book", initial_uv: [0, 0],
+          ...(i > 0 ? { play_event: startEvent } : {}),
+          end_event: nextEvent
+        };
+        const control = {
+          type: "image", texture: "textures/ui/intro/" + texName,
+          size: ["100%", "100%"], uv_size: [frameW, frameH],
+          uv: "@introaddon." + animName, anchor_from: "center", anchor_to: "center",
+          layer: 100 + n, disable_anim_fast_forward: true
+        };
+        if (i > 0) {
+          const alphaName = "sheet_" + n + "_alpha";
+          uiAnimations[alphaName] = { anim_type: "alpha", from: 0, to: 1, duration: 0.01, play_event: startEvent };
+          control.alpha = "@introaddon." + alphaName;
+        }
+        uiControls.push({ ["sheet_" + n]: control });
+      }
+      const introUi = { namespace: "introaddon", ...uiAnimations, overlay: { type: "panel", size: ["100%", "100%"], controls: uiControls } };
+      rpZip.file("ui/intro_ui.json", JSON.stringify(introUi, null, 2));
+      rpZip.file("ui/_ui_defs.json", JSON.stringify(["ui/hud_screen.json", "ui/intro_ui.json"], null, 2));
+      rpZip.file("ui/hud_screen.json", JSON.stringify({
+        namespace: "hud",
+        root_panel: { modifications: [{ array_name: "controls", operation: "insert_front", value: { "introaddon_overlay@introaddon.overlay": {} } }] }
+      }, null, 2));
+      const audioPath = actualAudio.endsWith(".ogg") ? "sounds/intro.ogg" : "sounds/intro.wav";
+      rpZip.file(audioPath, audioData, { binary: true, compression: "STORE" });
+      rpZip.file("sounds/sound_definitions.json", JSON.stringify({
+        "introaddon:cinematic_intro": { category: "music", sounds: [{ name: audioPath.replace(/\\.(ogg|wav)$/i, ""), volume: 1.0, pitch: 1.0 }] }
+      }, null, 2));
+
+      const scriptLines = [
+        'import { world, system } from "@minecraft/server";',
+        "const CONFIG = " + JSON.stringify(config) + ";",
+        'const SOUND_ID = "introaddon:cinematic_intro";',
+        "let groupSoundStarted = false;",
+        "let groupWaitActive = false;",
+        "function playIntroSound(player) { try { player.playSound(SOUND_ID, { volume: 1.0, pitch: 1.0 }); } catch (e) {} }",
+        "world.afterEvents.playerSpawn.subscribe((event) => {",
+        "  const player = event.player;",
+        '  if (CONFIG.playback.replayPolicy === "once_per_world" && !event.initialSpawn) return;',
+        '  if (CONFIG.playback.mode === "per_player") { system.runTimeout(() => playIntroSound(player), 2); return; }',
+        "  if (groupSoundStarted || groupWaitActive) return;",
+        "  groupWaitActive = true;",
+        "  const startedAt = system.currentTick;",
+        "  const runId = system.runInterval(() => {",
+        "    const players = world.getAllPlayers();",
+        "    if (players.length >= CONFIG.playback.minimumPlayers) {",
+        "      groupSoundStarted = true; groupWaitActive = false; system.clearRun(runId);",
+        "      for (const p of players) playIntroSound(p);",
+        "    } else if (system.currentTick - startedAt > 2400) { groupWaitActive = false; system.clearRun(runId); }",
+        "  }, 20);",
+        "});"
+      ];
+      bpZip.file("scripts/main.js", scriptLines.join("\\n"));
+      bpZip.file("introaddon_config.json", JSON.stringify(config, null, 2));
+      bpZip.file("README.txt", "Activa el pack de comportamiento y el pack de recursos. La UI visual empieza al cargar el HUD; el modo grupal solo puede retrasar el audio, no sincronizar el inicio visual de todos los clientes.\\n");
+      const [rpBytes, bpBytes] = await Promise.all([
+        rpZip.generateAsync({ type: "uint8array", compression: "STORE" }),
+        bpZip.generateAsync({ type: "uint8array", compression: "STORE" })
+      ]);
+      const addonZip = new JSZip();
+      addonZip.file("IntroAddon_RP.mcpack", rpBytes, { binary: true, compression: "STORE" });
+      addonZip.file("IntroAddon_BP.mcpack", bpBytes, { binary: true, compression: "STORE" });
+      const addonBlob = await addonZip.generateAsync({ type: "blob", compression: "STORE" }, meta => setProgress(88 + meta.percent * 0.12, "Empaquetando addon…"));
+      const assetBlob = await zip.generateAsync({ type: "blob", compression: "STORE" });
+      state.outputBlob = addonBlob;
+      state.assetBlob = assetBlob;
+      const baseName = "IntroAddon_" + safeName(state.file.name.replace(/\\.[^.]+$/, ""));
+      state.outputName = baseName + ".mcaddon";
+      state.assetName = baseName + "_Resources.zip";
+      setProgress(100, "Addon generado.");
+      setStatus("Generado: addon .mcaddon con " + entries.length + " fotogramas, " + sheetMeta.length + " spritesheet(s), audio y configuración.", "success");
       $("downloadAgain").classList.remove("hidden");
-      log("Paquete generado: " + bytesLabel(blob.size));
+      $("downloadAssets").classList.remove("hidden");
+      log("Addon generado: " + bytesLabel(addonBlob.size));
       downloadOutput();
     } catch (error) {
       console.error(error);
@@ -217,6 +349,14 @@
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
+  function downloadAssets() {
+    if (!state.assetBlob) return;
+    const url = URL.createObjectURL(state.assetBlob);
+    const a = document.createElement("a"); a.href = url; a.download = state.assetName;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
   $("generate").addEventListener("click", run);
   $("downloadAgain").addEventListener("click", downloadOutput);
+  $("downloadAssets").addEventListener("click", downloadAssets);
 })();
