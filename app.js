@@ -229,7 +229,11 @@
           { type: "data", uuid: bpDataUuid, version: [1,0,0] },
           { type: "script", language: "javascript", entry: "scripts/main.js", uuid: bpScriptUuid, version: [1,0,0] }
         ],
-        dependencies: [{ uuid: rpUuid, version: [1,0,0] }, { module_name: "@minecraft/server", version: "1.13.0" }]
+        dependencies: [
+          { uuid: rpUuid, version: [1,0,0] },
+          { module_name: "@minecraft/server", version: "1.13.0" },
+          { module_name: "@minecraft/server-ui", version: "1.3.0" }
+        ]
       }, null, 2));
 
       const uiAnimations = {};
@@ -310,26 +314,33 @@
 
       const scriptLines = [
         'import { world, system } from "@minecraft/server";',
+        'import { ActionFormData, ModalFormData } from "@minecraft/server-ui";',
         "const CONFIG = " + JSON.stringify(config) + ";",
         'const SOUND_ID = "introaddon:cinematic_intro";',
-        "let groupSoundStarted = false;",
-        "let groupWaitActive = false;",
-        "function playIntroSound(player) { try { player.playSound(SOUND_ID, { volume: 1.0, pitch: 1.0 }); } catch (e) {} }",
-        "world.afterEvents.playerSpawn.subscribe((event) => {",
-        "  const player = event.player;",
-        '  if (CONFIG.playback.replayPolicy !== "every_join" && !event.initialSpawn) return;',
-        '  if (CONFIG.playback.mode === "per_player") { system.runTimeout(() => playIntroSound(player), 2); return; }',
-        "  if (groupSoundStarted || groupWaitActive) return;",
-        "  groupWaitActive = true;",
-        "  const startedAt = system.currentTick;",
-        "  const runId = system.runInterval(() => {",
-        "    const players = world.getAllPlayers();",
-        "    if (players.length >= CONFIG.playback.minimumPlayers) {",
-        "      groupSoundStarted = true; groupWaitActive = false; system.clearRun(runId);",
-        "      for (const p of players) playIntroSound(p);",
-        "    } else if (system.currentTick - startedAt > 2400) { groupWaitActive = false; system.clearRun(runId); }",
-        "  }, 20);",
-        "});"
+        'let menuShown = false;',
+        'let playbackMode = "per_player";',
+        'let minimumPlayers = 2;',
+        'let groupSoundStarted = false;',
+        'function playIntroSound(player) { try { player.playSound(SOUND_ID, { volume: 1.0, pitch: 1.0 }); } catch (e) {} }',
+        'async function showFirstPlayerMenu(player) {',
+        '  if (menuShown) return;',
+        '  menuShown = true;',
+        '  try {',
+        '    const form = new ActionFormData().title("IntroAddon").body("¿Cómo quieres reproducir la intro en este mundo?").button("Individual - cada jugador al entrar").button("Grupal - una intro para el grupo");',
+        '    const result = await form.show(player);',
+        '    if (result.canceled || result.selection === undefined) { menuShown = false; return; }',
+        '    playbackMode = result.selection === 0 ? "per_player" : "group_once";',
+        '    if (playbackMode === "group_once") {',
+        '      const settings = new ModalFormData().title("Intro grupal").slider("Jugadores necesarios para iniciar", 1, 20, 1, 2);',
+        '      const answer = await settings.show(player);',
+        '      if (!answer.canceled && answer.formValues && Number.isFinite(answer.formValues[0])) minimumPlayers = Math.max(1, Math.floor(answer.formValues[0]));',
+        '    }',
+        '    player.sendMessage(playbackMode === "per_player" ? "§aIntroAddon: modo individual seleccionado." : "§aIntroAddon: modo grupal seleccionado. Jugadores necesarios: " + minimumPlayers);',
+        '    if (playbackMode === "per_player") { playIntroSound(player); }',
+        '    else { const runId = system.runInterval(() => { const players = world.getAllPlayers(); if (!groupSoundStarted && players.length >= minimumPlayers) { groupSoundStarted = true; system.clearRun(runId); for (const p of players) playIntroSound(p); } }, 20); }',
+        '  } catch (e) { menuShown = false; try { player.sendMessage("IntroAddon: no se pudo abrir el menú. Comprueba que el pack de scripts esté activo."); } catch (_) {} }',
+        '}',
+        'world.afterEvents.playerSpawn.subscribe((event) => { if (!event.initialSpawn) return; const player = event.player; system.runTimeout(() => { if (!menuShown) showFirstPlayerMenu(player); }, 20); });'
       ];
       bpZip.file("scripts/main.js", scriptLines.join("\n"));
       bpZip.file("introaddon_config.json", JSON.stringify(config, null, 2));
