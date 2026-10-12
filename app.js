@@ -135,7 +135,7 @@
     state.busy = true;
     $("generate").disabled = true;
     $("log").textContent = "";
-    log("Versión de procesamiento: fotogramas por segmentos de 8 segundos · build 2026-10-12-c");
+    log("Versión de procesamiento: fotogramas por segmentos de 8 segundos · build 2026-10-12-d");
     $("progressWrap").classList.remove("hidden");
     $("downloadAgain").classList.add("hidden");
     let ff;
