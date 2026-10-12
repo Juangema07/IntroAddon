@@ -219,7 +219,7 @@
           // Algunas compilaciones de FFmpeg.wasm reportan exit(0) como rechazo aunque
           // el comando haya terminado bien. Solo se acepta si hay JPEG reales en MEMFS.
           const completedFiles = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n));
-          if (/Program terminated with exit\\(0\\)/i.test(reason) && completedFiles.length > 0) {
+          if (/Program terminated with exit\(0\)/i.test(reason) && completedFiles.length > 0) {
             log("FFmpeg terminó el segmento " + (chunk + 1) + " con exit(0); se validaron " + completedFiles.length + " fotogramas temporales.");
           } else {
             const detail = (state.ffmpegMessages || []).slice(-8).join(" | ");
