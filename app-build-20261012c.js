@@ -200,7 +200,7 @@
       };
 
       // Limpia cualquier resto de una ejecución anterior dentro del MEMFS.
-      for (const name of ff.FS("readdir", "/").filter(n => /^frame_\\d{6}\\.jpg$/.test(n))) {
+      for (const name of ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n))) {
         try { ff.FS("unlink", name); } catch (_) {}
       }
       log("Extrayendo fotogramas a " + fps + " FPS en una sola ejecución de FFmpeg…");
@@ -212,7 +212,7 @@
         );
       } catch (err) {
         const reason = err && err.message ? err.message : String(err);
-        const completedFiles = ff.FS("readdir", "/").filter(n => /^frame_\\d{6}\\.jpg$/.test(n));
+        const completedFiles = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n));
         if (/Program terminated with exit\\(0\\)/i.test(reason) && completedFiles.length > 0) {
           log("FFmpeg finalizó la extracción con exit(0); se validaron " + completedFiles.length + " fotogramas temporales.");
         } else {
@@ -222,7 +222,7 @@
         }
       }
 
-      const batch = ff.FS("readdir", "/").filter(n => /^frame_\\d{6}\\.jpg$/.test(n)).sort();
+      const batch = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n)).sort();
       if (!batch.length) throw new Error("FFmpeg terminó sin generar fotogramas. Prueba con otro vídeo MP4 o revisa su códec.");
       log("Extracción completada: " + batch.length + " fotogramas temporales. Montando spritesheets y liberando memoria por lotes…");
       const clientBatchSize = 120;
@@ -247,7 +247,7 @@
         }
       }
       if (!totalFrames) throw new Error("FFmpeg no generó fotogramas. Prueba con otro vídeo MP4 o revisa su códec.");
-      log("Fotogramas procesados: " + totalFrames + " en " + totalChunks + " segmentos (JPEG temporales; spritesheets finales PNG).");
+      log("Fotogramas procesados: " + totalFrames + " · extracción continua (JPEG temporales; spritesheets finales PNG).");
       setProgress(82, "Spritesheets preparados…");
 
       const config = {
