@@ -153,10 +153,7 @@
           await ff.run("-i", inputName, "-vn", "-map", "0:a:0", "-c:a", "pcm_s16le", "-y", actualAudio);
         }
       } catch (err) {
-        if (audioFormat !== "ogg") throw new Error("No se pudo extraer el audio. Comprueba que el vídeo tenga una pista de audio.");
-        log("El codificador OGG no está disponible; se intentará extraer WAV.");
-        actualAudio = "intro_audio.wav";
-        await ff.run("-i", inputName, "-vn", "-map", "0:a:0", "-c:a", "pcm_s16le", "-y", actualAudio);
+        throw new Error("No se pudo generar audio OGG compatible con Bedrock. Comprueba que el vídeo tenga audio e inténtalo con otro archivo.");
       }
       if (!ff.FS("readdir", "/").includes(actualAudio)) throw new Error("FFmpeg no generó el archivo de audio esperado.");
       const audioData = ff.FS("readFile", actualAudio);
@@ -205,7 +202,7 @@
       const rpZip = new JSZip(), bpZip = new JSZip();
       rpZip.file("manifest.json", JSON.stringify({
         format_version: 2,
-        header: { name: "IntroAddon Resources", description: "Recursos cinematográficos generados por IntroAddon Studio.", uuid: rpUuid, version: [1,0,0], min_engine_version: [1,20,80] },
+        header: { name: "IntroAddon Resources", description: "Recursos cinematográficos generados por IntroAddon Studio.", uuid: rpUuid, version: [1,0,0], min_engine_version: [1,21,0] },
         modules: [{ type: "resources", uuid: rpModuleUuid, version: [1,0,0] }]
       }, null, 2));
       bpZip.file("manifest.json", JSON.stringify({
@@ -303,7 +300,7 @@
         "function playIntroSound(player) { try { player.playSound(SOUND_ID, { volume: 1.0, pitch: 1.0 }); } catch (e) {} }",
         "world.afterEvents.playerSpawn.subscribe((event) => {",
         "  const player = event.player;",
-        '  if (CONFIG.playback.replayPolicy === "once_per_world" && !event.initialSpawn) return;',
+        '  if (CONFIG.playback.replayPolicy !== "every_join" && !event.initialSpawn) return;',
         '  if (CONFIG.playback.mode === "per_player") { system.runTimeout(() => playIntroSound(player), 2); return; }',
         "  if (groupSoundStarted || groupWaitActive) return;",
         "  groupWaitActive = true;",
