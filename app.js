@@ -109,7 +109,7 @@
       const inputName = "input." + ext;
       ff.FS("writeFile", inputName, await ff.__fetchFile(state.file));
       tempFiles.push(inputName);
-      const imageFormat = $("imageFormat").value;
+      const imageFormat = "png";
       const keepAspect = $("keepAspect").checked;
       const vf = keepAspect
         ? "fps=" + fps + ",scale=" + frameW + ":" + frameH + ":force_original_aspect_ratio=decrease,pad=" + frameW + ":" + frameH + ":(ow-iw)/2:(oh-ih)/2"
