@@ -101,6 +101,7 @@
       const rows = readNumber("rows", 1, 32);
       const minPlayers = readNumber("minPlayers", 1, 100);
       const capacity = cols * rows;
+      if (frameW * cols > 4096 || frameH * rows > 4096) throw new Error("El spritesheet superaría 4096 px en uno de sus lados. Reduce la resolución, columnas o filas para mantener compatibilidad con Bedrock móvil.");
       if (frameW * frameH * capacity > 180000000) throw new Error("La hoja sería demasiado grande para un procesamiento seguro. Reduce la resolución, filas o columnas.");
       setStatus("Preparando el procesamiento…");
       ff = await getFFmpeg();
@@ -261,7 +262,21 @@
         };
         if (i > 0) {
           const alphaName = "sheet_" + n + "_alpha";
-          uiAnimations[alphaName] = { anim_type: "alpha", from: 0, to: 1, duration: 0.01, play_event: startEvent };
+          if (i === sheetMeta.length - 1) {
+            const holdName = "sheet_" + n + "_hold";
+            const fadeName = "sheet_" + n + "_fade";
+            uiAnimations[alphaName] = { anim_type: "alpha", from: 0, to: 1, duration: 0.01, play_event: startEvent, next: "@introaddon." + holdName };
+            uiAnimations[holdName] = { anim_type: "alpha", from: 1, to: 1, duration: sheet.frameCount / fps, next: "@introaddon." + fadeName };
+            uiAnimations[fadeName] = { anim_type: "alpha", from: 1, to: 0, duration: 0.45 };
+          } else {
+            uiAnimations[alphaName] = { anim_type: "alpha", from: 0, to: 1, duration: 0.01, play_event: startEvent };
+          }
+          control.alpha = "@introaddon." + alphaName;
+        } else if (sheetMeta.length === 1) {
+          const alphaName = "sheet_1_alpha", holdName = "sheet_1_hold", fadeName = "sheet_1_fade";
+          uiAnimations[alphaName] = { anim_type: "alpha", from: 1, to: 1, duration: sheet.frameCount / fps, next: "@introaddon." + holdName };
+          uiAnimations[holdName] = { anim_type: "alpha", from: 1, to: 1, duration: 0.01, next: "@introaddon." + fadeName };
+          uiAnimations[fadeName] = { anim_type: "alpha", from: 1, to: 0, duration: 0.45 };
           control.alpha = "@introaddon." + alphaName;
         }
         uiControls.push({ ["sheet_" + n]: control });
