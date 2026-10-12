@@ -83,12 +83,13 @@
       </div>
 
       <div class="panel output-panel">
-        <div class="section-heading"><span class="step">04</span><div><h2>Generar paquete</h2><p>Se crea un ZIP con recursos y configuración para IntroAddon.</p></div></div>
+        <div class="section-heading"><span class="step">04</span><div><h2>Generar paquete</h2><p>Se genera un .mcaddon experimental y un ZIP separado con los recursos preparados.</p></div></div>
         <div class="progress-wrap hidden" id="progressWrap"><div class="progress-label"><span id="progressText">Preparando…</span><span id="progressPercent">0%</span></div><div class="progress-track"><div id="progressBar"></div></div><pre id="log" aria-live="polite"></pre></div>
         <div id="status" class="status" role="status">Carga un vídeo para comenzar.</div>
-        <button id="generate" class="primary" disabled>Generar paquete <span>→</span></button>
-        <button id="downloadAgain" class="secondary hidden">Descargar paquete generado</button>
-        <p class="footnote">El procesamiento puede consumir bastante memoria con vídeos largos, resoluciones altas o FPS elevados. Puedes reducir cualquiera de esos valores si el dispositivo se queda sin memoria.</p>
+        <button id="generate" class="primary" disabled>Generar addon .mcaddon <span>→</span></button>
+        <button id="downloadAgain" class="secondary hidden">Descargar addon generado</button>
+        <button id="downloadAssets" class="secondary hidden">Descargar recursos y configuración (ZIP)</button>
+        <p class="footnote">El procesamiento puede consumir bastante memoria con vídeos largos, resoluciones altas o FPS elevados. Puedes reducir cualquiera de esos valores si el dispositivo se queda sin memoria. La UI de Bedrock y el modo grupal deben probarse en la versión exacta del juego.</p>
       </div>
     </section>
   </main>
