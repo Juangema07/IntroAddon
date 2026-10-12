@@ -1,6 +1,6 @@
 # IntroAddon
 
-Generador web para preparar intros cinematográficas de Minecraft Bedrock a partir de un vídeo. La web está pensada para publicarse con GitHub Pages y procesar los archivos localmente en el navegador.
+Generador web para preparar recursos y crear un .mcaddon experimental de intro cinematográfica para Minecraft Bedrock a partir de un vídeo. La web está pensada para GitHub Pages y procesa los archivos localmente en el navegador.
 
 ## Funciones de esta primera versión
 
@@ -8,7 +8,7 @@ Generador web para preparar intros cinematográficas de Minecraft Bedrock a part
 - Elegir FPS de extracción y dimensiones de cada fotograma.
 - Elegir columnas y filas por spritesheet y crear varias hojas automáticamente.
 - Extraer el audio del vídeo (OGG para Bedrock, con WAV como alternativa).
-- Generar un paquete ZIP con spritesheets, audio y un archivo JSON con metadatos/configuración.
+- Generar un .mcaddon con packs de recursos y comportamiento, además de un ZIP de recursos y metadatos.
 - Definir modo de inicio individual o grupal, cantidad mínima de jugadores y comportamiento de reproducción.
 - El procesamiento se ejecuta en el navegador; el vídeo no se sube a un servidor de IntroAddon.
 
