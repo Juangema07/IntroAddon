@@ -213,7 +213,7 @@
       } catch (err) {
         const reason = err && err.message ? err.message : String(err);
         const completedFiles = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n));
-        if (/Program terminated with exit\\(0\\)/i.test(reason) && completedFiles.length > 0) {
+        if (/Program terminated with exit\(0\)/i.test(reason) && completedFiles.length > 0) {
           log("FFmpeg finalizó la extracción con exit(0); se validaron " + completedFiles.length + " fotogramas temporales.");
         } else {
           const detail = (state.ffmpegMessages || []).slice(-8).join(" | ");
