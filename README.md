@@ -17,8 +17,6 @@ Generador web para preparar una intro de Minecraft Bedrock desde un vídeo local
 - Audio OGG para Bedrock.
 - Generación de un `.mcaddon` con pack de recursos (UI, spritesheets, metadatos Aseprite y audio) y pack de comportamiento (evento de sonido y configuración).
 - ZIP separado con spritesheets, audio y `introaddon_config.json`.
-- El primer jugador elige individual/grupal dentro del mundo; la web no presenta esas opciones.
-- Resolución, FPS y distribución de hojas recomendados automáticamente según el vídeo.
 
 ## Publicar con GitHub Pages
 
@@ -33,7 +31,7 @@ El repositorio incluye `.github/workflows/pages.yml`.
 
 1. Abre la web publicada en un navegador actualizado.
 2. Selecciona el vídeo.
-3. Ajusta FPS, resolución, filas/columnas y modo de reproducción.
+3. Revisa las recomendaciones automáticas de FPS, resolución y distribución de hojas; puedes ajustar los valores técnicos. El modo de reproducción se elige dentro del mundo.
 4. Pulsa **Generar addon .mcaddon**.
 5. Importa el `.mcaddon` en Minecraft Bedrock y activa ambos packs en el mundo.
 6. Usa el ZIP separado si necesitas inspeccionar o reemplazar recursos y configuración.
@@ -42,7 +40,7 @@ El repositorio incluye `.github/workflows/pages.yml`.
 
 - Minecraft no convierte el vídeo: la web prepara los recursos y el addon los consume.
 - El pack usa JSON UI `aseprite_flip_book` para animar los spritesheets. La modificación de `hud_screen` debe probarse en la versión exacta de Bedrock usada en Android y Windows.
-- La UI visual comienza cuando cada cliente carga su HUD. El modo grupal puede esperar para iniciar el audio hasta alcanzar el mínimo de jugadores, pero la API pública de scripting no permite sincronizar de forma fiable el inicio visual de todos los clientes. Por eso, **el modo individual es el primer modo recomendado para las pruebas**.
+- El menú dentro del mundo aparece al primer jugador y permite elegir individual o grupal; el modo grupal pregunta el mínimo de jugadores. En esta versión, la selección controla el audio, pero la UI visual aún empieza cuando carga el HUD de cada cliente. Por tanto, la sincronización visual grupal no está resuelta y debe probarse antes de considerar la función terminada.
 - La política de repetición del script afecta al audio; la UI puede reiniciarse cuando el HUD se vuelva a cargar. Debe verificarse en juego antes de usarlo en un mundo principal.
 - El spritesheet está limitado a 4096 px por lado para reducir problemas de compatibilidad y memoria.
 - Si FFmpeg.wasm no puede codificar OGG o el vídeo no contiene audio, la generación se detiene con un error claro.
