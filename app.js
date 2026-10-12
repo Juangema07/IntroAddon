@@ -39,8 +39,35 @@
     $("videoInfo").textContent = file.name + " · " + bytesLabel(file.size) + (file.type ? " · " + file.type : "");
     $("videoInfo").classList.remove("hidden");
     $("generate").disabled = false;
-    setStatus("Vídeo listo. Ajusta la salida y genera el paquete.");
+    $("preview").onloadedmetadata = () => {
+      state.duration = Number.isFinite($("preview").duration) ? $("preview").duration : 0;
+      state.sourceWidth = $("preview").videoWidth || 0;
+      state.sourceHeight = $("preview").videoHeight || 0;
+      autoConfigure();
+    };
+    setStatus("Vídeo listo. Calculando la configuración recomendada…");
   }
+
+  function autoConfigure() {
+    if (!state.sourceWidth || !state.sourceHeight) return;
+    const duration = state.duration || 0;
+    const fps = duration > 180 ? 12 : duration > 60 ? 15 : 24;
+    $("fps").value = String(fps);
+    const scale = Math.min(1, 640 / state.sourceWidth, 360 / state.sourceHeight);
+    const round16 = n => Math.max(16, Math.round((n * scale) / 16) * 16);
+    const w = round16(state.sourceWidth), h = round16(state.sourceHeight);
+    $("frameWidth").value = String(w); $("frameHeight").value = String(h);
+    const maxCols = Math.max(1, Math.floor(4096 / w));
+    const maxRows = Math.max(1, Math.floor(4096 / h));
+    const targetFrames = Math.max(1, Math.ceil(fps * Math.min(duration || 2, 2)));
+    const cols = Math.min(maxCols, Math.max(1, Math.ceil(Math.sqrt(targetFrames * h / w))));
+    const rows = Math.min(maxRows, Math.max(1, Math.ceil(targetFrames / cols)));
+    $("columns").value = String(cols); $("rows").value = String(rows);
+    $("autoConfig").textContent = "Origen: " + state.sourceWidth + "×" + state.sourceHeight + " · " +
+      (duration ? duration.toFixed(2) + " s" : "duración por detectar") + " · Recomendado: " +
+      w + "×" + h + " px, " + fps + " FPS, hojas de " + cols + "×" + rows + " fotogramas.";
+  }
+  $("fps").addEventListener("change", autoConfigure);
   $("videoFile").addEventListener("change", e => acceptFile(e.target.files[0]));
   const drop = $("dropzone");
   ["dragenter", "dragover"].forEach(type => drop.addEventListener(type, e => { e.preventDefault(); drop.classList.add("dragging"); }));
