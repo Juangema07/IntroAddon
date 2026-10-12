@@ -1,37 +1,46 @@
-# IntroAddon
+# IntroAddon Studio
 
-Generador web para preparar recursos y crear un .mcaddon experimental de intro cinematográfica para Minecraft Bedrock a partir de un vídeo. La web está pensada para GitHub Pages y procesa los archivos localmente en el navegador.
+Generador web para preparar una intro de Minecraft Bedrock desde un vídeo local. La web extrae fotogramas, crea spritesheets y extrae audio OGG; después genera un `.mcaddon` experimental y un ZIP de recursos/configuración.
 
-## Funciones de esta primera versión
+## Funciones
 
-- Cargar un vídeo local.
-- Elegir FPS de extracción y dimensiones de cada fotograma.
-- Elegir columnas y filas por spritesheet y crear varias hojas automáticamente.
-- Extraer el audio del vídeo (OGG para Bedrock, con WAV como alternativa).
-- Generar un .mcaddon con packs de recursos y comportamiento, además de un ZIP de recursos y metadatos.
-- Definir modo de inicio individual o grupal, cantidad mínima de jugadores y comportamiento de reproducción.
-- El procesamiento se ejecuta en el navegador; el vídeo no se sube a un servidor de IntroAddon.
+- Procesamiento en el navegador: el vídeo no se envía a un servidor de IntroAddon.
+- FPS de extracción configurables: 12, 15, 20, 24, 30 y 60.
+- Ancho y alto de cada fotograma configurables.
+- Columnas y filas por spritesheet configurables; se generan varias hojas cuando hacen falta.
+- Audio OGG para Bedrock.
+- Generación de un `.mcaddon` con pack de recursos (UI, spritesheets, metadatos Aseprite y audio) y pack de comportamiento (evento de sonido y configuración).
+- ZIP separado con spritesheets, audio y `introaddon_config.json`.
+- Opciones para inicio individual/grupal, mínimo de jugadores y política de repetición.
 
 ## Publicar con GitHub Pages
 
-1. En el repositorio, abre **Settings → Pages**.
-2. En **Build and deployment**, elige **Deploy from a branch**.
-3. Selecciona la rama `main` y la carpeta `/ (root)`.
-4. Guarda y espera a que GitHub publique la web.
+El repositorio incluye `.github/workflows/pages.yml`.
+
+1. Abre **Settings → Pages**.
+2. En **Build and deployment → Source**, selecciona **GitHub Actions**.
+3. Ve a **Actions** y confirma que el flujo **Deploy IntroAddon Studio to GitHub Pages** termine correctamente.
+4. La web se publicará en `https://juangema07.github.io/IntroAddon/`.
 
 ## Uso
 
-Abre la web en un navegador actualizado, carga un vídeo y configura la salida. Pulsa **Generar paquete** y espera a que termine. El ZIP contiene recursos preparados y `introaddon_config.json`.
+1. Abre la web publicada en un navegador actualizado.
+2. Selecciona el vídeo.
+3. Ajusta FPS, resolución, filas/columnas y modo de reproducción.
+4. Pulsa **Generar addon .mcaddon**.
+5. Importa el `.mcaddon` en Minecraft Bedrock y activa ambos packs en el mundo.
+6. Usa el ZIP separado si necesitas inspeccionar o reemplazar recursos y configuración.
 
-## Importante: límites de Bedrock
+## Límites conocidos de esta versión experimental
 
-Este repositorio inicia el generador de recursos y la configuración portable. La creación de spritesheets/audio ocurre en la web, nunca dentro de Minecraft. El ZIP generado documenta la secuencia y la configuración para que el reproductor Bedrock pueda consumirlas.
+- Minecraft no convierte el vídeo: la web prepara los recursos y el addon los consume.
+- El pack usa JSON UI `aseprite_flip_book` para animar los spritesheets. La modificación de `hud_screen` debe probarse en la versión exacta de Bedrock usada en Android y Windows.
+- La UI visual comienza cuando cada cliente carga su HUD. El modo grupal puede esperar para iniciar el audio hasta alcanzar el mínimo de jugadores, pero la API pública de scripting no permite sincronizar de forma fiable el inicio visual de todos los clientes. Por eso, **el modo individual es el primer modo recomendado para las pruebas**.
+- La política de repetición del script afecta al audio; la UI puede reiniciarse cuando el HUD se vuelva a cargar. Debe verificarse en juego antes de usarlo en un mundo principal.
+- El spritesheet está limitado a 4096 px por lado para reducir problemas de compatibilidad y memoria.
+- Si FFmpeg.wasm no puede codificar OGG o el vídeo no contiene audio, la generación se detiene con un error claro.
+- La primera carga requiere conexión para descargar FFmpeg.wasm y JSZip desde CDN.
 
-Bedrock no reproduce un archivo de vídeo directamente ni descubre de forma universal archivos arbitrariamente renombrados. Para cambiar los nombres sin tocar código, el paquete incluye un manifiesto que registra las rutas reales de los recursos. La compatibilidad final de la capa de reproducción (especialmente la UI a pantalla completa y la coordinación de inicio multijugador) debe verificarse en las versiones objetivo de Bedrock para Android y Windows.
+## Pruebas recomendadas
 
-## Bibliotecas
-
-- FFmpeg.wasm para extraer fotogramas y audio localmente.
-- JSZip para empaquetar los resultados.
-
-Las bibliotecas se cargan desde CDN, por lo que la primera carga requiere conexión a Internet.
+Primero prueba una intro corta, 12–15 FPS y fotogramas de 256×144 o 320×180. Confirma importación del addon, pantalla completa, orden de los fotogramas, sonido y cierre de la animación antes de probar vídeos largos o multijugador.
