@@ -3,6 +3,12 @@
 Generador web para preparar una intro de Minecraft Bedrock desde un vídeo local. La web extrae fotogramas, crea spritesheets y extrae audio OGG; después genera un `.mcaddon` experimental y un ZIP de recursos/configuración.
 
 ## Funciones
+- La web ya no ofrece el selector individual/grupal.
+- Tras entrar el primer jugador, el addon abre un formulario dentro del mundo para elegir individual o grupal; el modo grupal pregunta cuántos jugadores deben estar presentes.
+- Al cargar el vídeo, la web recomienda automáticamente dimensiones, FPS y distribución de spritesheets a partir de la resolución y duración del archivo.
+- FFmpeg.wasm se ejecuta con el núcleo de un solo hilo para evitar la dependencia de SharedArrayBuffer.
+
+## Funciones (detalle)
 
 - Procesamiento en el navegador: el vídeo no se envía a un servidor de IntroAddon.
 - FPS de extracción configurables: 12, 15, 20, 24, 30 y 60.
