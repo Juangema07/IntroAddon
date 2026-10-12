@@ -135,7 +135,7 @@
     state.busy = true;
     $("generate").disabled = true;
     $("log").textContent = "";
-    log("Versión de procesamiento: extracción continua de fotogramas · build 2026-10-12-e");
+    log("Versión de procesamiento: extracción continua de fotogramas · build 2026-10-12-f");
     $("progressWrap").classList.remove("hidden");
     $("downloadAgain").classList.add("hidden");
     let ff;
@@ -369,9 +369,6 @@
       const introUi = { namespace: "introaddon", ...uiAnimations, overlay: { type: "panel", size: ["100%", "100%"], controls: uiControls } };
       rpZip.file("ui/intro_ui.json", JSON.stringify(introUi, null, 2));
       rpZip.file("ui/_ui_defs.json", JSON.stringify({ ui_defs: ["ui/hud_screen.json", "ui/intro_ui.json"] }, null, 2));
-      // Valida los metadatos críticos antes de generar el archivo instalable.
-      const uiDefsCheck = { ui_defs: ["ui/hud_screen.json", "ui/intro_ui.json"] };
-      if (!Array.isArray(uiDefsCheck.ui_defs) || uiDefsCheck.ui_defs.length !== 2) throw new Error("No se pudo validar la lista de pantallas UI.");
       rpZip.file("ui/hud_screen.json", JSON.stringify({
         namespace: "hud",
         root_panel: { modifications: [{ array_name: "controls", operation: "insert_front", value: { "introaddon_overlay@introaddon.overlay": {} } }] }
