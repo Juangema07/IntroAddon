@@ -1,5 +1,3 @@
-import { FFmpeg } from "https://esm.sh/@ffmpeg/ffmpeg@0.12.10";
-import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
 
 (() => {
   "use strict";
@@ -19,6 +17,7 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
   };
   const safeName = (name) => name.normalize("NFKD").replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 90) || "intro_video";
   const makeUuid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 3 | 8)).toString(16); }));
+  const fileBytes = async (file) => new Uint8Array(await file.arrayBuffer());
   const bytesLabel = (n) => n < 1024 * 1024 ? (n / 1024).toFixed(1) + " KB" : (n / 1024 / 1024).toFixed(2) + " MB";
   const readNumber = (id, min, max) => {
     const n = Number($(id).value);
@@ -77,17 +76,18 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
 
   async function getFFmpeg() {
     if (state.ffmpeg) return state.ffmpeg;
-    const ff = new FFmpeg();
-    ff.on("log", ({ message }) => { if (message) log(message); });
-    ff.on("progress", ({ progress }) => {
-      if (Number.isFinite(progress)) setProgress(Math.min(68, Math.max(5, progress * 68)), "Procesando vídeo…");
+    if (!window.FFmpeg || typeof window.FFmpeg.createFFmpeg !== "function") {
+      throw new Error("No se pudo cargar la biblioteca FFmpeg. Recarga la página y vuelve a intentarlo.");
+    }
+    log("Cargando FFmpeg.wasm de un solo hilo con worker clásico compatible con GitHub Pages…");
+    const ff = window.FFmpeg.createFFmpeg({
+      corePath: "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js",
+      log: true,
+      progress: ({ ratio }) => {
+        if (Number.isFinite(ratio)) setProgress(Math.min(68, Math.max(5, ratio * 68)), "Procesando vídeo…");
+      }
     });
-    log("Cargando FFmpeg.wasm en modo de un solo hilo (sin SharedArrayBuffer)…");
-    const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd";
-    const coreURL = await toBlobURL(baseURL + "/ffmpeg-core.js", "text/javascript");
-    const wasmURL = await toBlobURL(baseURL + "/ffmpeg-core.wasm", "application/wasm");
-    const workerURL = await toBlobURL("https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/worker.js", "text/javascript");
-    await ff.load({ coreURL, wasmURL, workerURL });
+    await ff.load();
     state.ffmpeg = ff;
     log("Motor listo.");
     return ff;
@@ -134,7 +134,7 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
       ff = await getFFmpeg();
       const ext = (state.file.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
       const inputName = "input." + ext;
-      await ff.writeFile(inputName, await fetchFile(state.file));
+      ff.FS("writeFile", inputName, await fileBytes(state.file));
       tempFiles.push(inputName);
       const imageFormat = "png";
       const keepAspect = $("keepAspect").checked;
@@ -142,8 +142,8 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
         ? "fps=" + fps + ",scale=" + frameW + ":" + frameH + ":force_original_aspect_ratio=decrease,pad=" + frameW + ":" + frameH + ":(ow-iw)/2:(oh-ih)/2"
         : "fps=" + fps + ",scale=" + frameW + ":" + frameH;
       log("Extrayendo fotogramas a " + fps + " FPS…");
-      await ff.exec(["-i", inputName, "-an", "-vf", vf, "-vsync", "0", "-y", "-start_number", "1", "frame_%06d.png"]);
-      const entries = (await ff.listDir("/")).map(x => x.name).filter(n => /^frame_\d{6}\.png$/.test(n)).sort();
+      await ff.run("-i", inputName, "-an", "-vf", vf, "-vsync", "0", "-y", "-start_number", "1", "frame_%06d.png");
+      const entries = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.png$/.test(n)).sort();
       if (!entries.length) throw new Error("No se extrajeron fotogramas. Prueba con otro formato de vídeo.");
       entries.forEach(n => tempFiles.push(n));
       log("Fotogramas extraídos: " + entries.length);
@@ -155,13 +155,13 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
         const batch = entries.slice(s * capacity, (s + 1) * capacity);
         const images = [];
         for (const name of batch) {
-          const data = await ff.readFile(name);
+          const data = ff.FS("readFile", name);
           const url = URL.createObjectURL(new Blob([data], { type: "image/png" }));
           try {
             const img = await createImageBitmap(await (await fetch(url)).blob());
             images.push(img);
           } finally { URL.revokeObjectURL(url); }
-          await ff.deleteFile(name);
+          ff.FS("unlink", name);
         }
         const meta = await makeSheet(images, frameW, frameH, cols, rows, imageFormat, s + 1, zip);
         images.forEach(img => img.close && img.close());
@@ -173,12 +173,12 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
       log("Extrayendo audio OGG…");
       const actualAudio = "intro_audio.ogg";
       try {
-        await ff.exec(["-i", inputName, "-vn", "-map", "0:a:0", "-c:a", "libvorbis", "-q:a", "5", "-y", actualAudio]);
+        await ff.run("-i", inputName, "-vn", "-map", "0:a:0", "-c:a", "libvorbis", "-q:a", "5", "-y", actualAudio);
       } catch (err) {
         throw new Error("No se pudo extraer audio OGG. Comprueba que el vídeo tenga pista de audio e inténtalo con otro archivo.");
       }
-      if (!(await ff.listDir("/")).some(x => x.name === actualAudio)) throw new Error("FFmpeg no generó el archivo de audio esperado.");
-      const audioData = await ff.readFile(actualAudio);
+      if (!ff.FS("readdir", "/").includes(actualAudio)) throw new Error("FFmpeg no generó el archivo de audio esperado.");
+      const audioData = ff.FS("readFile", actualAudio);
       const finalAudioPath = actualAudio.endsWith(".ogg") ? "audio/intro.ogg" : "audio/intro.wav";
       zip.file(finalAudioPath, audioData, { binary: true, compression: "STORE" });
       tempFiles.push(actualAudio);
@@ -375,7 +375,7 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
       log("ERROR: " + (error && error.message ? error.message : String(error)));
     } finally {
       if (ff) {
-        for (const name of tempFiles) { try { await ff.deleteFile(name); } catch (_) {} }
+        for (const name of tempFiles) { try { ff.FS("unlink", name); } catch (_) {} }
       }
       state.busy = false;
       $("generate").disabled = !state.file;
