@@ -334,7 +334,7 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
         '    playbackMode = result.selection === 0 ? "per_player" : "group_once";',
         '    modeSelected = true;',
         '    if (playbackMode === "group_once") {',
-        '      const settings = new ModalFormData().title("Intro grupal").slider("Jugadores necesarios para iniciar", 1, 20, 1, 2);',
+        '      const settings = new ModalFormData().title("Intro grupal").slider("Jugadores necesarios para iniciar", 1, 20, { valueStep: 1, defaultValue: 2 });',
         '      const answer = await settings.show(player);',
         '      if (!answer.canceled && answer.formValues && Number.isFinite(answer.formValues[0])) minimumPlayers = Math.max(1, Math.floor(answer.formValues[0]));',
         '    }',
@@ -343,7 +343,7 @@ import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
         '    else { const runId = system.runInterval(() => { const players = world.getAllPlayers(); if (!groupSoundStarted && players.length >= minimumPlayers) { groupSoundStarted = true; system.clearRun(runId); for (const p of players) playIntroSound(p); } }, 20); }',
         '  } catch (e) { menuShown = false; try { player.sendMessage("IntroAddon: no se pudo abrir el menú. Comprueba que el pack de scripts esté activo."); } catch (_) {} }',
         '}',
-        'world.afterEvents.playerSpawn.subscribe((event) => { if (!event.initialSpawn) return; const player = event.player; system.runTimeout(() => { if (!menuShown) showFirstPlayerMenu(player); else if (modeSelected && playbackMode === "per_player") playIntroSound(player); }, 20); });'
+        'world.afterEvents.playerSpawn.subscribe((event) => { if (!event.initialSpawn) return; const player = event.player; system.runTimeout(() => { if (!menuShown) showFirstPlayerMenu(player); else if (modeSelected && playbackMode === "per_player") playIntroSound(player); }, 1); });'
       ];
       bpZip.file("scripts/main.js", scriptLines.join("\n"));
       bpZip.file("introaddon_config.json", JSON.stringify(config, null, 2));
