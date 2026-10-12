@@ -7,7 +7,7 @@ Generador web para preparar intros cinematográficas de Minecraft Bedrock a part
 - Cargar un vídeo local.
 - Elegir FPS de extracción y dimensiones de cada fotograma.
 - Elegir columnas y filas por spritesheet y crear varias hojas automáticamente.
-- Extraer el audio del vídeo.
+- Extraer el audio del vídeo (OGG para Bedrock, con WAV como alternativa).
 - Generar un paquete ZIP con spritesheets, audio y un archivo JSON con metadatos/configuración.
 - Definir modo de inicio individual o grupal, cantidad mínima de jugadores y comportamiento de reproducción.
 - El procesamiento se ejecuta en el navegador; el vídeo no se sube a un servidor de IntroAddon.
