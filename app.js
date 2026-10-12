@@ -99,7 +99,6 @@
       const frameH = readNumber("frameHeight", 16, 4096);
       const cols = readNumber("columns", 1, 32);
       const rows = readNumber("rows", 1, 32);
-      const minPlayers = readNumber("minPlayers", 1, 100);
       const capacity = cols * rows;
       if (frameW * cols > 4096 || frameH * rows > 4096) throw new Error("El spritesheet superaría 4096 px en uno de sus lados. Reduce la resolución, columnas o filas para mantener compatibilidad con Bedrock móvil.");
       if (frameW * frameH * capacity > 180000000) throw new Error("La hoja sería demasiado grande para un procesamiento seguro. Reduce la resolución, filas o columnas.");
@@ -107,7 +106,7 @@
       ff = await getFFmpeg();
       const ext = (state.file.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
       const inputName = "input." + ext;
-      ff.FS("writeFile", inputName, await ff.__fetchFile(state.file));
+      await ff.writeFile(inputName, await fetchFile(state.file));
       tempFiles.push(inputName);
       const imageFormat = "png";
       const keepAspect = $("keepAspect").checked;
@@ -115,7 +114,7 @@
         ? "fps=" + fps + ",scale=" + frameW + ":" + frameH + ":force_original_aspect_ratio=decrease,pad=" + frameW + ":" + frameH + ":(ow-iw)/2:(oh-ih)/2"
         : "fps=" + fps + ",scale=" + frameW + ":" + frameH;
       log("Extrayendo fotogramas a " + fps + " FPS…");
-      await ff.run("-i", inputName, "-an", "-vf", vf, "-vsync", "0", "-y", "-start_number", "1", "frame_%06d.png");
+      await ff.exec(["-i", inputName, "-an", "-vf", vf, "-vsync", "0", "-y", "-start_number", "1", "frame_%06d.png"]);
       const entries = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.png$/.test(n)).sort();
       if (!entries.length) throw new Error("No se extrajeron fotogramas. Prueba con otro formato de vídeo.");
       entries.forEach(n => tempFiles.push(n));
@@ -128,13 +127,13 @@
         const batch = entries.slice(s * capacity, (s + 1) * capacity);
         const images = [];
         for (const name of batch) {
-          const data = ff.FS("readFile", name);
+          const data = await ff.readFile(name);
           const url = URL.createObjectURL(new Blob([data], { type: "image/png" }));
           try {
             const img = await createImageBitmap(await (await fetch(url)).blob());
             images.push(img);
           } finally { URL.revokeObjectURL(url); }
-          ff.FS("unlink", name);
+          await ff.deleteFile(name);
         }
         const meta = await makeSheet(images, frameW, frameH, cols, rows, imageFormat, s + 1, zip);
         images.forEach(img => img.close && img.close());
@@ -142,27 +141,22 @@
         setProgress(70 + ((s + 1) / totalSheets) * 12, "Montando spritesheet " + (s + 1) + " de " + totalSheets + "…");
       }
 
-      const audioFormat = $("audioFormat").value;
-      const audioName = "audio/intro." + audioFormat;
-      log("Extrayendo audio (" + audioFormat.toUpperCase() + ")…");
-      let actualAudio = "intro_audio." + audioFormat;
+      const audioFormat = "ogg";
+      log("Extrayendo audio OGG…");
+      const actualAudio = "intro_audio.ogg";
       try {
-        if (audioFormat === "ogg") {
-          await ff.run("-i", inputName, "-vn", "-map", "0:a:0", "-c:a", "libvorbis", "-q:a", "5", "-y", actualAudio);
-        } else {
-          await ff.run("-i", inputName, "-vn", "-map", "0:a:0", "-c:a", "pcm_s16le", "-y", actualAudio);
-        }
+        await ff.exec(["-i", inputName, "-vn", "-map", "0:a:0", "-c:a", "libvorbis", "-q:a", "5", "-y", actualAudio]);
       } catch (err) {
-        throw new Error("No se pudo generar audio OGG compatible con Bedrock. Comprueba que el vídeo tenga audio e inténtalo con otro archivo.");
+        throw new Error("No se pudo extraer audio OGG. Comprueba que el vídeo tenga pista de audio e inténtalo con otro archivo.");
       }
-      if (!ff.FS("readdir", "/").includes(actualAudio)) throw new Error("FFmpeg no generó el archivo de audio esperado.");
-      const audioData = ff.FS("readFile", actualAudio);
+      if (!(await ff.listDir("/")).some(x => x.name === actualAudio)) throw new Error("FFmpeg no generó el archivo de audio esperado.");
+      const audioData = await ff.readFile(actualAudio);
       const finalAudioPath = actualAudio.endsWith(".ogg") ? "audio/intro.ogg" : "audio/intro.wav";
       zip.file(finalAudioPath, audioData, { binary: true, compression: "STORE" });
       tempFiles.push(actualAudio);
       setProgress(85, "Creando manifiesto y paquete…");
 
-      const duration = Number.isFinite($("preview").duration) ? $("preview").duration : entries.length / fps;
+      const duration = state.duration || entries.length / fps;
       const config = {
         schemaVersion: 1,
         project: "IntroAddon",
@@ -170,9 +164,6 @@
         source: { name: state.file.name, durationSeconds: duration, fps: fps, extractedFrames: entries.length },
         playback: {
           targetPlatforms: ["Android", "Windows"],
-          mode: $("playMode").value,
-          minimumPlayers: minPlayers,
-          replayPolicy: $("replay").value,
           durationSeconds: duration,
           fps: fps,
           audioPath: actualAudio.endsWith(".ogg") ? "audio/intro.ogg" : "audio/intro.wav"
@@ -343,7 +334,7 @@
       log("ERROR: " + (error && error.message ? error.message : String(error)));
     } finally {
       if (ff) {
-        for (const name of tempFiles) { try { ff.FS("unlink", name); } catch (_) {} }
+        for (const name of tempFiles) { try { await ff.deleteFile(name); } catch (_) {} }
       }
       state.busy = false;
       $("generate").disabled = !state.file;
