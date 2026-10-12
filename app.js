@@ -81,7 +81,8 @@
     }
     log("Cargando FFmpeg.wasm de un solo hilo con worker clásico compatible con GitHub Pages…");
     const ff = window.FFmpeg.createFFmpeg({
-      corePath: "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js",
+      mainName: "main",
+      corePath: "https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js",
       log: true,
       progress: ({ ratio }) => {
         if (Number.isFinite(ratio)) setProgress(Math.min(68, Math.max(5, ratio * 68)), "Procesando vídeo…");
