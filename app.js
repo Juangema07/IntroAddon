@@ -317,9 +317,9 @@
         "  }, 20);",
         "});"
       ];
-      bpZip.file("scripts/main.js", scriptLines.join("\\n"));
+      bpZip.file("scripts/main.js", scriptLines.join("\n"));
       bpZip.file("introaddon_config.json", JSON.stringify(config, null, 2));
-      bpZip.file("README.txt", "Activa el pack de comportamiento y el pack de recursos. La UI visual empieza al cargar el HUD; el modo grupal solo puede retrasar el audio, no sincronizar el inicio visual de todos los clientes.\\n");
+      bpZip.file("README.txt", "Activa el pack de comportamiento y el pack de recursos. La UI visual empieza al cargar el HUD; el modo grupal solo puede retrasar el audio, no sincronizar el inicio visual de todos los clientes.\n");
       const [rpBytes, bpBytes] = await Promise.all([
         rpZip.generateAsync({ type: "uint8array", compression: "STORE" }),
         bpZip.generateAsync({ type: "uint8array", compression: "STORE" })
