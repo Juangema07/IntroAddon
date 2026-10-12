@@ -141,7 +141,7 @@
         : "fps=" + fps + ",scale=" + frameW + ":" + frameH;
       log("Extrayendo fotogramas a " + fps + " FPS…");
       await ff.exec(["-i", inputName, "-an", "-vf", vf, "-vsync", "0", "-y", "-start_number", "1", "frame_%06d.png"]);
-      const entries = (await ff.listDir("/")).map(x => x.name).filter(n => /^frame_\\d{6}\\.png$/.test(n)).sort();
+      const entries = (await ff.listDir("/")).map(x => x.name).filter(n => /^frame_\d{6}\.png$/.test(n)).sort();
       if (!entries.length) throw new Error("No se extrajeron fotogramas. Prueba con otro formato de vídeo.");
       entries.forEach(n => tempFiles.push(n));
       log("Fotogramas extraídos: " + entries.length);
