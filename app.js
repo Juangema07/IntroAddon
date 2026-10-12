@@ -154,6 +154,23 @@
       const inputName = "input." + ext;
       ff.FS("writeFile", inputName, await fileBytes(state.file));
       tempFiles.push(inputName);
+      // Procesar el audio antes de generar miles de PNG reduce el riesgo de quedarnos sin memoria.
+      log("Extrayendo audio OGG (Vorbis, 44.1 kHz)…");
+      state.ffmpegMessages = [];
+      const actualAudio = "intro_audio.ogg";
+      let audioData;
+      try {
+        await ff.run("-i", inputName, "-map", "0:a:0", "-vn", "-sn", "-dn", "-ac", "2", "-ar", "44100", "-c:a", "libvorbis", "-q:a", "5", "-f", "ogg", "-y", actualAudio);
+        if (!ff.FS("readdir", "/").includes(actualAudio)) throw new Error("FFmpeg terminó sin crear intro_audio.ogg.");
+        audioData = ff.FS("readFile", actualAudio);
+        if (!audioData || audioData.length < 64) throw new Error("El archivo OGG generado está vacío o incompleto.");
+        tempFiles.push(actualAudio);
+        log("Audio OGG extraído: " + (audioData.length / 1024 / 1024).toFixed(2) + " MB.");
+      } catch (err) {
+        const detail = (state.ffmpegMessages || []).slice(-8).join(" | ");
+        const reason = err && err.message ? err.message : String(err);
+        throw new Error("Falló la extracción OGG antes de procesar los fotogramas. " + reason + (detail ? " · FFmpeg: " + detail : " · FFmpeg no informó la causa; puede ser un códec no compatible o falta de memoria."));
+      }
       const imageFormat = "png";
       const keepAspect = $("keepAspect").checked;
       const vf = keepAspect
@@ -188,23 +205,7 @@
         setProgress(70 + ((s + 1) / totalSheets) * 12, "Montando spritesheet " + (s + 1) + " de " + totalSheets + "…");
       }
 
-      // Procesar el audio antes de generar miles de PNG reduce el riesgo de quedarnos sin memoria.
-      log("Extrayendo audio OGG (Vorbis, 44.1 kHz)…");
-      state.ffmpegMessages = [];
-      const actualAudio = "intro_audio.ogg";
-      let audioData;
-      try {
-        await ff.run("-i", inputName, "-map", "0:a:0", "-vn", "-sn", "-dn", "-ac", "2", "-ar", "44100", "-c:a", "libvorbis", "-q:a", "5", "-f", "ogg", "-y", actualAudio);
-        if (!ff.FS("readdir", "/").includes(actualAudio)) throw new Error("FFmpeg terminó sin crear intro_audio.ogg.");
-        audioData = ff.FS("readFile", actualAudio);
-        if (!audioData || audioData.length < 64) throw new Error("El archivo OGG generado está vacío o incompleto.");
-        tempFiles.push(actualAudio);
-        log("Audio OGG extraído: " + (audioData.length / 1024 / 1024).toFixed(2) + " MB.");
-      } catch (err) {
-        const detail = (state.ffmpegMessages || []).slice(-8).join(" | ");
-        const reason = err && err.message ? err.message : String(err);
-        throw new Error("Falló la extracción OGG antes de procesar los fotogramas. " + reason + (detail ? " · FFmpeg: " + detail : " · FFmpeg no informó la causa; puede ser un códec no compatible o falta de memoria."));
-      }
+
 
 
       const duration = state.duration || entries.length / fps;
