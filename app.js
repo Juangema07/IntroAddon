@@ -182,10 +182,9 @@
         throw new Error("No se pudo detectar la duración del vídeo. Vuelve a seleccionarlo y espera a que aparezcan sus dimensiones y duración antes de generar.");
       }
 
-      // No extraer el vídeo completo de una vez: FFmpeg.wasm conserva sus archivos en MEMFS.
-      // Se procesan segmentos cortos y se eliminan sus JPEG tras incorporarlos a las hojas.
-      const chunkSeconds = 8;
-      const totalChunks = Math.ceil(duration / chunkSeconds);
+      // core-st puede dejar el worker ocupado tras terminar un comando de extracción
+      // de imágenes con exit(0). Ejecutar toda la extracción de vídeo en UNA sola llamada
+      // evita lanzar un segundo comando sobre ese worker ocupado.
       const sheetMeta = [];
       let totalFrames = 0;
       let sheetFrames = [];
@@ -200,55 +199,55 @@
         sheetMeta.push(meta);
       };
 
-      log("Extrayendo fotogramas a " + fps + " FPS por segmentos de " + chunkSeconds + " segundos…");
-      for (let chunk = 0; chunk < totalChunks; chunk++) {
-        const startTime = chunk * chunkSeconds;
-        const segmentDuration = Math.min(chunkSeconds, duration - startTime);
-        for (const name of ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n))) {
+      // Limpia cualquier resto de una ejecución anterior dentro del MEMFS.
+      for (const name of ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n))) {
+        try { ff.FS("unlink", name); } catch (_) {}
+      }
+      log("Extrayendo fotogramas a " + fps + " FPS en una sola ejecución de FFmpeg…");
+      state.ffmpegMessages = [];
+      try {
+        await ff.run(
+          "-i", inputName, "-an", "-vf", vf, "-vsync", "0", "-q:v", "8",
+          "-f", "image2", "-y", "-start_number", "1", "frame_%06d.jpg"
+        );
+      } catch (err) {
+        const reason = err && err.message ? err.message : String(err);
+        const completedFiles = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n));
+        if (/Program terminated with exit\(0\)/i.test(reason) && completedFiles.length > 0) {
+          log("FFmpeg finalizó la extracción con exit(0); se validaron " + completedFiles.length + " fotogramas temporales.");
+        } else {
+          const detail = (state.ffmpegMessages || []).slice(-8).join(" | ");
+          throw new Error("FFmpeg no pudo completar la extracción de fotogramas. " + reason +
+            (detail ? " · FFmpeg: " + detail : " · No se encontraron fotogramas válidos; prueba una resolución o FPS menores."));
+        }
+      }
+
+      const batch = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n)).sort();
+      if (!batch.length) throw new Error("FFmpeg terminó sin generar fotogramas. Prueba con otro vídeo MP4 o revisa su códec.");
+      log("Extracción completada: " + batch.length + " fotogramas temporales. Montando spritesheets y liberando memoria por lotes…");
+      const clientBatchSize = 120;
+      for (let index = 0; index < batch.length; index++) {
+        const name = batch[index];
+        const data = ff.FS("readFile", name);
+        let img;
+        try {
+          img = await createImageBitmap(new Blob([data], { type: "image/jpeg" }));
+        } catch (err) {
+          throw new Error("No se pudo abrir el fotograma " + (index + 1) + " de " + batch.length + ": " + (err && err.message ? err.message : String(err)));
+        } finally {
           try { ff.FS("unlink", name); } catch (_) {}
         }
-        state.ffmpegMessages = [];
-        try {
-          await ff.run(
-            "-ss", startTime.toFixed(3), "-i", inputName, "-t", segmentDuration.toFixed(3),
-            "-an", "-vf", vf, "-vsync", "0", "-q:v", "5", "-f", "image2",
-            "-y", "-start_number", "1", "frame_%06d.jpg"
-          );
-        } catch (err) {
-          const reason = err && err.message ? err.message : String(err);
-          // Algunas compilaciones de FFmpeg.wasm reportan exit(0) como rechazo aunque
-          // el comando haya terminado bien. Solo se acepta si hay JPEG reales en MEMFS.
-          const completedFiles = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n));
-          if (/Program terminated with exit\(0\)/i.test(reason) && completedFiles.length > 0) {
-            log("FFmpeg terminó el segmento " + (chunk + 1) + " con exit(0); se validaron " + completedFiles.length + " fotogramas temporales.");
-          } else {
-            const detail = (state.ffmpegMessages || []).slice(-8).join(" | ");
-            throw new Error("FFmpeg falló en el segmento " + (chunk + 1) + " de " + totalChunks + ". " + reason +
-              (detail ? " · FFmpeg: " + detail : " · No se encontraron fotogramas válidos; revisa el códec y la memoria disponible."));
-          }
+        sheetFrames.push(img);
+        totalFrames++;
+        if (sheetFrames.length >= capacity) await flushSheet();
+        if ((index + 1) % clientBatchSize === 0 || index + 1 === batch.length) {
+          setProgress(68 + ((index + 1) / batch.length) * 14,
+            "Montando hojas · " + (index + 1) + " de " + batch.length + " fotogramas…");
+          await new Promise(resolve => setTimeout(resolve, 0));
         }
-        const batch = ff.FS("readdir", "/").filter(n => /^frame_\d{6}\.jpg$/.test(n)).sort();
-        if (!batch.length) log("Aviso: el segmento " + (chunk + 1) + " no produjo fotogramas.");
-        for (const name of batch) {
-          const data = ff.FS("readFile", name);
-          let img;
-          try {
-            img = await createImageBitmap(new Blob([data], { type: "image/jpeg" }));
-          } catch (err) {
-            throw new Error("No se pudo abrir un fotograma del segmento " + (chunk + 1) + ": " + (err && err.message ? err.message : String(err)));
-          } finally {
-            try { ff.FS("unlink", name); } catch (_) {}
-          }
-          sheetFrames.push(img);
-          totalFrames++;
-          if (sheetFrames.length >= capacity) await flushSheet();
-        }
-        setProgress(68 + ((chunk + 1) / totalChunks) * 14,
-          "Procesando segmento " + (chunk + 1) + " de " + totalChunks + " · " + totalFrames + " fotogramas…");
       }
-      await flushSheet();
       if (!totalFrames) throw new Error("FFmpeg no generó fotogramas. Prueba con otro vídeo MP4 o revisa su códec.");
-      log("Fotogramas procesados: " + totalFrames + " en " + totalChunks + " segmentos (JPEG temporales; spritesheets finales PNG).");
+      log("Fotogramas procesados: " + totalFrames + " · extracción continua (JPEG temporales; spritesheets finales PNG).");
       setProgress(82, "Spritesheets preparados…");
 
       const config = {
