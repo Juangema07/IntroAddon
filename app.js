@@ -288,7 +288,7 @@
       const audioPath = actualAudio.endsWith(".ogg") ? "sounds/intro.ogg" : "sounds/intro.wav";
       rpZip.file(audioPath, audioData, { binary: true, compression: "STORE" });
       rpZip.file("sounds/sound_definitions.json", JSON.stringify({
-        "introaddon:cinematic_intro": { category: "music", sounds: [{ name: audioPath.replace(/\\.(ogg|wav)$/i, ""), volume: 1.0, pitch: 1.0 }] }
+        "introaddon:cinematic_intro": { category: "music", sounds: [{ name: audioPath.replace(/\.(ogg|wav)$/i, ""), volume: 1.0, pitch: 1.0 }] }
       }, null, 2));
 
       const scriptLines = [
@@ -328,7 +328,7 @@
       const assetBlob = await zip.generateAsync({ type: "blob", compression: "STORE" });
       state.outputBlob = addonBlob;
       state.assetBlob = assetBlob;
-      const baseName = "IntroAddon_" + safeName(state.file.name.replace(/\\.[^.]+$/, ""));
+      const baseName = "IntroAddon_" + safeName(state.file.name.replace(/\.[^.]+$/, ""));
       state.outputName = baseName + ".mcaddon";
       state.assetName = baseName + "_Resources.zip";
       setProgress(100, "Addon generado.");
