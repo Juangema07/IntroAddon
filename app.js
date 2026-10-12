@@ -135,7 +135,7 @@
     state.busy = true;
     $("generate").disabled = true;
     $("log").textContent = "";
-    log("Versión de procesamiento: extracción continua de fotogramas · build 2026-10-12-g");
+    log("Versión de procesamiento: extracción continua de fotogramas · build 2026-10-12-h");
     $("progressWrap").classList.remove("hidden");
     $("downloadAgain").classList.add("hidden");
     let ff;
@@ -389,7 +389,14 @@
       } });
       const introUi = {
         namespace: "introaddon", ...uiAnimations,
-        overlay: { type: "panel", size: ["100%", "100%"], layer: 10000, controls: uiControls }
+        overlay: {
+          type: "panel", size: ["100%", "100%"], layer: 10000, controls: uiControls,
+          // La intro solo tapa el HUD cuando el script activa el título señal.
+          bindings: [
+            { binding_name: "#hud_title_text_string" },
+            { binding_type: "view", source_property_name: "(#hud_title_text_string = 'INTROADDON_START')", target_property_name: "#visible" }
+          ]
+        }
       };
       rpZip.file("ui/intro_ui.json", JSON.stringify(introUi, null, 2));
       rpZip.file("ui/_ui_defs.json", JSON.stringify({ ui_defs: ["ui/hud_screen.json", "ui/intro_ui.json"] }, null, 2));
@@ -427,25 +434,25 @@
         'let minimumPlayers = 2;',
         'let soundVolume = 1.0;',
         'let groupSoundStarted = false;',
-        'function playIntroSound(player) { try { player.playSound(SOUND_ID, { volume: soundVolume, pitch: 1.0 }); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudo reproducir el audio: " + String(e)); } catch (_) {} } }',
-        'function startGroupAudio() { const runId = system.runInterval(() => { const players = world.getAllPlayers(); if (!groupSoundStarted && players.length >= minimumPlayers) { groupSoundStarted = true; system.clearRun(runId); system.runTimeout(() => { for (const p of world.getAllPlayers()) playIntroSound(p); }, 40); } }, 20); }',
+        'function startIntro(player) { const ticks = Math.max(20, Math.ceil(Number(CONFIG.playback.durationSeconds || 5) * 20) + 12); try { player.onScreenDisplay.setTitle("INTROADDON_START", { fadeInDuration: 0, stayDuration: ticks, fadeOutDuration: 0 }); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudo activar la pantalla de intro: " + String(e)); } catch (_) {} } try { player.playSound(SOUND_ID, { volume: soundVolume, pitch: 1.0 }); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudo reproducir el audio: " + String(e)); } catch (_) {} } },
+        'function startGroupAudio() { const runId = system.runInterval(() => { const players = world.getAllPlayers(); if (!groupSoundStarted && players.length >= minimumPlayers) { groupSoundStarted = true; system.clearRun(runId); system.runTimeout(() => { for (const p of world.getAllPlayers()) startIntro(p); }, 40); } }, 20); }',
         'async function showFirstPlayerMenu(player) {',
         '  if (menuShown) return;',
         '  menuShown = true;',
         '  try {',
         '    const form = new ModalFormData().title("IntroAddon - configuración").dropdown("Modo de reproducción", ["Individual - cada jugador al entrar", "Grupal - esperar al grupo"], 0).slider("Volumen de audio (%)", 0, 100, { valueStep: 5, defaultValue: 100 }).slider("Jugadores necesarios (modo grupal)", 1, 20, { valueStep: 1, defaultValue: 2 });',
         '    const answer = await form.show(player);',
-        '    if (answer.canceled || !answer.formValues) { playbackMode = "per_player"; soundVolume = 1.0; minimumPlayers = 2; modeSelected = true; player.sendMessage("§eIntroAddon: se usarán los valores predeterminados."); system.runTimeout(() => playIntroSound(player), 40); return; }',
+        '    if (answer.canceled || !answer.formValues) { playbackMode = "per_player"; soundVolume = 1.0; minimumPlayers = 2; modeSelected = true; player.sendMessage("§eIntroAddon: se usarán los valores predeterminados."); system.runTimeout(() => startIntro(player), 40); return; }',
         '    playbackMode = Number(answer.formValues[0]) === 0 ? "per_player" : "group_once";',
         '    soundVolume = Math.max(0, Math.min(1, Number(answer.formValues[1]) / 100));',
         '    minimumPlayers = Math.max(1, Math.min(20, Math.floor(Number(answer.formValues[2]) || 2)));',
         '    modeSelected = true;',
         '    player.sendMessage(playbackMode === "per_player" ? "§aIntroAddon: modo individual. El audio comenzará en breve." : "§aIntroAddon: modo grupal. Esperando a " + minimumPlayers + " jugador(es).");',
-        '    if (playbackMode === "per_player") system.runTimeout(() => playIntroSound(player), 40);',
+        '    if (playbackMode === "per_player") system.runTimeout(() => startIntro(player), 40);',
         '    else startGroupAudio();',
-        '  } catch (e) { modeSelected = true; playbackMode = "per_player"; soundVolume = 1.0; try { player.sendMessage("§cIntroAddon: no se pudo abrir la configuración; se usará el modo individual. " + String(e)); } catch (_) {} system.runTimeout(() => playIntroSound(player), 40); }',
+        '  } catch (e) { modeSelected = true; playbackMode = "per_player"; soundVolume = 1.0; try { player.sendMessage("§cIntroAddon: no se pudo abrir la configuración; se usará el modo individual. " + String(e)); } catch (_) {} system.runTimeout(() => startIntro(player), 40); }',
         '}',
-        'world.afterEvents.playerSpawn.subscribe((event) => { if (!event.initialSpawn) return; const player = event.player; system.runTimeout(() => { if (!menuShown) showFirstPlayerMenu(player); else if (modeSelected && playbackMode === "per_player") system.runTimeout(() => playIntroSound(player), 40); }, 20); });',
+        'world.afterEvents.playerSpawn.subscribe((event) => { if (!event.initialSpawn) return; const player = event.player; system.runTimeout(() => { if (!menuShown) showFirstPlayerMenu(player); else if (modeSelected && playbackMode === "per_player") system.runTimeout(() => startIntro(player), 40); }, 20); });',
         'system.runInterval(() => { if (menuShown) return; const players = world.getAllPlayers(); if (players.length > 0) showFirstPlayerMenu(players[0]); }, 40);'
       ];
       bpZip.file("scripts/main.js", scriptLines.join("\n"));
