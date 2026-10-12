@@ -79,16 +79,26 @@
     if (!window.FFmpeg || typeof window.FFmpeg.createFFmpeg !== "function") {
       throw new Error("No se pudo cargar la biblioteca FFmpeg. Recarga la página y vuelve a intentarlo.");
     }
-    log("Cargando FFmpeg.wasm de un solo hilo con worker clásico compatible con GitHub Pages…");
+    log("Preparando FFmpeg.wasm 0.11.6 con core-st 0.11.1 (un solo hilo, sin SharedArrayBuffer)…");
+    log("Compatibilidad del navegador: SharedArrayBuffer=" + (typeof SharedArrayBuffer !== "undefined" ? "disponible" : "no disponible") + ". Se usa core-st para no depender de él.");
     const ff = window.FFmpeg.createFFmpeg({
       mainName: "main",
-      corePath: "https://cdn.jsdelivr.net/npm/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js",
+      corePath: "https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js",
       log: true,
       progress: ({ ratio }) => {
         if (Number.isFinite(ratio)) setProgress(Math.min(68, Math.max(5, ratio * 68)), "Procesando vídeo…");
       }
     });
-    await ff.load();
+    try {
+      await ff.load();
+    } catch (error) {
+      const detail = error && error.message ? error.message : String(error);
+      log("Fallo al inicializar FFmpeg: " + detail);
+      if (/SharedArrayBuffer/i.test(detail)) {
+        throw new Error("El CDN o el navegador está cargando un motor FFmpeg incompatible. Se ha seleccionado el core de un solo hilo; recarga la página actualizada y vuelve a intentarlo. Si persiste, envía el registro completo.");
+      }
+      throw new Error("No se pudo iniciar FFmpeg: " + detail);
+    }
     state.ffmpeg = ff;
     log("Motor listo.");
     return ff;
