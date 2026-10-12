@@ -1,8 +1,9 @@
 (() => {
   "use strict";
+  import { FFmpeg } from "https://esm.sh/@ffmpeg/ffmpeg@0.12.10";
+  import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
   const $ = (id) => document.getElementById(id);
-  const state = { file: null, previewUrl: null, ffmpeg: null, busy: false, outputBlob: null, assetBlob: null, outputName: "IntroAddon_Custom.mcaddon", assetName: "IntroAddon_Resources.zip" };
-  const ffmpegScript = window.FFmpeg;
+  const state = { file: null, previewUrl: null, ffmpeg: null, busy: false, outputBlob: null, assetBlob: null, outputName: "IntroAddon_Custom.mcaddon", assetName: "IntroAddon_Resources.zip", duration: 0, sourceWidth: 0, sourceHeight: 0 };
   const setStatus = (message, kind = "") => { $("status").textContent = message; $("status").className = "status" + (kind ? " " + kind : ""); };
   const setProgress = (percent, message) => {
     $("progressWrap").classList.remove("hidden");
@@ -48,18 +49,16 @@
 
   async function getFFmpeg() {
     if (state.ffmpeg) return state.ffmpeg;
-    if (!ffmpegScript || !ffmpegScript.createFFmpeg) throw new Error("No se pudo cargar FFmpeg.wasm. Comprueba la conexión y vuelve a cargar la página.");
-    const { createFFmpeg, fetchFile } = ffmpegScript;
-    const ff = createFFmpeg({
-      log: false,
-      corePath: "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js",
-      progress: ({ ratio }) => {
-        if (Number.isFinite(ratio)) setProgress(Math.min(68, Math.max(5, ratio * 68)), "Procesando vídeo…");
-      }
+    const ff = new FFmpeg();
+    ff.on("log", ({ message }) => { if (message) log(message); });
+    ff.on("progress", ({ progress }) => {
+      if (Number.isFinite(progress)) setProgress(Math.min(68, Math.max(5, progress * 68)), "Procesando vídeo…");
     });
-    ff.__fetchFile = fetchFile;
-    log("Cargando motor FFmpeg.wasm…");
-    await ff.load();
+    log("Cargando FFmpeg.wasm en modo de un solo hilo (sin SharedArrayBuffer)…");
+    const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd";
+    const coreURL = await toBlobURL(baseURL + "/ffmpeg-core.js", "text/javascript");
+    const wasmURL = await toBlobURL(baseURL + "/ffmpeg-core.wasm", "application/wasm");
+    await ff.load({ coreURL, wasmURL });
     state.ffmpeg = ff;
     log("Motor listo.");
     return ff;
