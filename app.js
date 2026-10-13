@@ -352,32 +352,18 @@
         const nextEvent = n < sheetMeta.length ? "introaddon_start_sheet_" + (n + 1) : "introaddon_finish";
         const pngBytes = await zip.file(sheet.filename).async("uint8array");
         rpZip.file("textures/ui/intro/" + texName + ".png", pngBytes, { binary: true, compression: "STORE" });
-        // Usar el formato Aseprite de Bedrock: cada frame queda descrito explícitamente
-        // en el JSON lateral, evitando depender de la interpretación de una tira flip_book.
-        const asepriteFrames = [];
-        for (let f = 0; f < sheet.frameCount; f++) {
-          asepriteFrames.push({
-            filename: "frame_" + String((i * capacity) + f + 1).padStart(6, "0"),
-            frame: { x: f * frameW, y: 0, w: frameW, h: frameH },
-            rotated: false, trimmed: false,
-            spriteSourceSize: { x: 0, y: 0, w: frameW, h: frameH },
-            sourceSize: { w: frameW, h: frameH },
-            duration: Math.max(1, Math.round(1000 / fps))
-          });
-        }
-        const asepriteData = {
-          frames: asepriteFrames,
-          meta: {
-            app: "IntroAddon Studio", version: "1.0", image: texName + ".png", format: "RGBA8888",
-            size: { w: frameW * cols, h: frameH }, scale: "1",
-            frameTags: [{ name: "intro", from: 0, to: sheet.frameCount - 1, direction: "forward" }],
-            layers: [{ name: "Intro", opacity: 255, blendMode: "normal" }], slices: []
-          }
-        };
-        rpZip.file("textures/ui/intro/" + texName + ".json", JSON.stringify(asepriteData, null, 2));
+        // Animación flip_book nativa de Bedrock, como la que utiliza el addon de referencia.
+        // La hoja es una tira horizontal: cada fotograma avanza frameW píxeles en X.
         uiAnimations[animName] = {
-          anim_type: "aseprite_flip_book",
+          anim_type: "flip_book",
           initial_uv: [0, 0],
+          frame_count: sheet.frameCount,
+          frame_step: frameW,
+          fps: fps,
+          duration: sheet.frameCount / fps,
+          reversible: false,
+          resettable: false,
+          easing: "linear",
           ...(i > 0 ? { play_event: startEvent } : {}),
           end_event: nextEvent
         };
@@ -452,11 +438,11 @@
       const audioPath = actualAudio.endsWith(".ogg") ? "sounds/intro.ogg" : "sounds/intro.wav";
       rpZip.file(audioPath, audioData, { binary: true, compression: "STORE" });
       rpZip.file("sounds/sound_definitions.json", JSON.stringify({
-        format_version: "1.14.0",
+        format_version: "1.20.20",
         sound_definitions: {
           "introaddon.cinematic_intro": {
-            category: "music",
-            sounds: [{ name: "sounds/intro", stream: true, volume: 1.0, is3D: false }]
+            category: "ui",
+            sounds: [{ name: "sounds/intro", stream: true, volume: 1.0, load_on_low_memory: true, is3D: false }]
           }
         }
       }, null, 2));
@@ -474,7 +460,7 @@
         'let minimumPlayers = 2;',
         'let soundVolume = 1.0;',
         'let groupSoundStarted = false;',
-        'function startIntro(player) { const ticks = Math.max(20, Math.ceil(Number(CONFIG.playback.durationSeconds || 5) * 20) + 12); const hidden = [HudElement.TouchControls, HudElement.Hotbar, HudElement.Crosshair, HudElement.Health, HudElement.Hunger, HudElement.Armor, HudElement.ProgressBar, HudElement.AirBubbles, HudElement.HorseHealth, HudElement.StatusEffects, HudElement.ItemText, HudElement.PaperDoll, HudElement.ToolTips]; try { player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, hidden); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudieron ocultar todos los controles: " + String(e)); } catch (_) {} } try { player.onScreenDisplay.setTitle("INTROADDON_START", { fadeInDuration: 0, stayDuration: ticks, fadeOutDuration: 0 }); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudo activar la pantalla de intro: " + String(e)); } catch (_) {} } system.runTimeout(() => { let apiError = null; try { player.playSound(SOUND_ID, { volume: soundVolume, pitch: 1.0 }); } catch (e) { apiError = e; try { player.runCommand("playsound " + SOUND_ID + " @s ~ ~ ~ " + soundVolume + " 1"); } catch (commandError) { try { player.sendMessage("§cIntroAddon: no se pudo iniciar el audio. Comprueba que el pack de recursos esté activo y que sounds/intro.ogg exista. API: " + String(apiError) + " · playsound: " + String(commandError)); } catch (_) {} } } }, 10); system.runTimeout(() => { try { player.onScreenDisplay.setHudVisibility(HudVisibility.Reset, hidden); } catch (_) {} }, ticks); }',
+        'function startIntro(player) { const ticks = Math.max(20, Math.ceil(Number(CONFIG.playback.durationSeconds || 5) * 20) + 12); const hidden = [HudElement.TouchControls, HudElement.Hotbar, HudElement.Crosshair, HudElement.Health, HudElement.Hunger, HudElement.Armor, HudElement.ProgressBar, HudElement.AirBubbles, HudElement.HorseHealth, HudElement.StatusEffects, HudElement.ItemText, HudElement.PaperDoll, HudElement.ToolTips]; try { player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, hidden); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudieron ocultar todos los controles: " + String(e)); } catch (_) {} } try { player.onScreenDisplay.setTitle("INTROADDON_START", { fadeInDuration: 0, stayDuration: ticks, fadeOutDuration: 0 }); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudo activar la pantalla de intro: " + String(e)); } catch (_) {} } let audioStarted = false; try { player.playSound(SOUND_ID, { volume: soundVolume, pitch: 1.0 }); audioStarted = true; } catch (apiError) { try { player.runCommand("playsound " + SOUND_ID + " @s ~ ~ ~ " + soundVolume + " 1"); audioStarted = true; } catch (commandError) { try { player.sendMessage("§cIntroAddon: no se pudo iniciar el audio. Comprueba que el pack de recursos esté activo y que sounds/intro.ogg exista. API: " + String(apiError) + " · playsound: " + String(commandError)); } catch (_) {} } } if (audioStarted) { try { player.sendMessage("§aIntroAddon: intro y audio iniciados."); } catch (_) {} } system.runTimeout(() => { try { player.onScreenDisplay.setHudVisibility(HudVisibility.Reset, hidden); } catch (_) {} }, ticks); }',
         'function startGroupAudio() { const runId = system.runInterval(() => { const players = world.getAllPlayers(); if (!groupSoundStarted && players.length >= minimumPlayers) { groupSoundStarted = true; system.clearRun(runId); system.runTimeout(() => { for (const p of world.getAllPlayers()) startIntro(p); }, 40); } }, 20); }',
         'async function showFirstPlayerMenu(player) {',
         '  if (menuShown || menuPending || menuAttempts >= 3) return;',
