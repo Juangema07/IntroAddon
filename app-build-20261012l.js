@@ -166,7 +166,7 @@
     state.busy = true;
     $("generate").disabled = true;
     $("log").textContent = "";
-    log("Versión de procesamiento: extracción continua de fotogramas · build 2026-10-12-h");
+    log("Versión de procesamiento: atlas Aseprite múltiples + audio OGG namespaced · build 2026-10-13-a");
     $("progressWrap").classList.remove("hidden");
     $("downloadAgain").classList.add("hidden");
     let ff;
@@ -256,64 +256,54 @@
       if (!batch.length) throw new Error("FFmpeg terminó sin generar fotogramas. Prueba con otro vídeo MP4 o revisa su códec.");
       const maxCols = Math.floor(4096 / frameW);
       const maxRows = Math.floor(4096 / frameH);
-      if (batch.length > maxCols * maxRows) {
-        throw new Error("El vídeo necesita " + batch.length + " fotogramas, pero a " + frameW + "×" + frameH + " solo caben " + (maxCols * maxRows) + " en una única imagen de máximo 4096×4096. Reduce los FPS o la resolución para probar el atlas único.");
-      }
-      cols = Math.min(maxCols, Math.max(1, requestedCols, Math.ceil(batch.length / maxRows)));
-      rows = Math.ceil(batch.length / cols);
-      capacity = batch.length;
-      const atlasCanvas = document.createElement("canvas");
-      atlasCanvas.width = frameW * cols;
-      atlasCanvas.height = frameH * rows;
-      if (atlasCanvas.width > 4096 || atlasCanvas.height > 4096) throw new Error("El atlas excede 4096 × 4096 px. Reduce FPS o resolución.");
-      const atlasContext = atlasCanvas.getContext("2d", { alpha: true });
-      if (!atlasContext) throw new Error("No se pudo crear el lienzo del atlas de vídeo.");
-      const asepriteFrames = [];
-      log("Extracción completada: " + batch.length + " fotogramas. Construyendo una única imagen atlas " + atlasCanvas.width + "×" + atlasCanvas.height + "…");
-      const clientBatchSize = 60;
-      for (let index = 0; index < batch.length; index++) {
-        const name = batch[index];
-        const data = ff.FS("readFile", name);
-        let img;
-        try {
-          img = await createImageBitmap(new Blob([data], { type: "image/jpeg" }));
-          const x = (index % cols) * frameW;
-          const y = Math.floor(index / cols) * frameH;
-          atlasContext.drawImage(img, x, y, frameW, frameH);
-          asepriteFrames.push({
-            filename: "frame_" + String(index + 1).padStart(6, "0") + ".png",
-            frame: { x, y, w: frameW, h: frameH },
-            rotated: false, trimmed: false,
-            spriteSourceSize: { x: 0, y: 0, w: frameW, h: frameH },
-            sourceSize: { w: frameW, h: frameH },
-            duration: Math.max(1, Math.round(1000 / fps))
-          });
-        } catch (err) {
-          throw new Error("No se pudo montar el fotograma " + (index + 1) + " de " + batch.length + ": " + (err && err.message ? err.message : String(err)));
-        } finally {
-          if (img && img.close) img.close();
-          try { ff.FS("unlink", name); } catch (_) {}
+      if (maxCols < 1 || maxRows < 1) throw new Error("Cada fotograma debe caber en 4096 × 4096 px.");
+      // Atlas Aseprite múltiples: ninguna textura supera 4096×4096 y cada hoja se enlaza con la siguiente.
+      cols = Math.min(maxCols, Math.max(1, requestedCols));
+      rows = maxRows;
+      capacity = cols * rows;
+      const sheetCount = Math.ceil(batch.length / capacity);
+      log("Extracción completada: " + batch.length + " fotogramas. Se crearán " + sheetCount + " atlas de hasta " + cols + "×" + rows + " celdas.");
+      for (let sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++) {
+        const first = sheetIndex * capacity;
+        const sheetBatch = batch.slice(first, first + capacity);
+        const actualRows = Math.ceil(sheetBatch.length / cols);
+        const canvas = document.createElement("canvas");
+        canvas.width = frameW * cols; canvas.height = frameH * actualRows;
+        const ctx = canvas.getContext("2d", { alpha: true });
+        if (!ctx) throw new Error("No se pudo crear el atlas " + (sheetIndex + 1) + ".");
+        const frames = [];
+        for (let localIndex = 0; localIndex < sheetBatch.length; localIndex++) {
+          const name = sheetBatch[localIndex], globalIndex = first + localIndex;
+          let img;
+          try {
+            img = await createImageBitmap(new Blob([ff.FS("readFile", name)], { type: "image/jpeg" }));
+            const x = (localIndex % cols) * frameW, y = Math.floor(localIndex / cols) * frameH;
+            ctx.drawImage(img, x, y, frameW, frameH);
+            frames.push({ filename: "frame_" + String(globalIndex + 1).padStart(6, "0") + ".png",
+              frame: { x, y, w: frameW, h: frameH }, rotated: false, trimmed: false,
+              spriteSourceSize: { x: 0, y: 0, w: frameW, h: frameH },
+              sourceSize: { w: frameW, h: frameH }, duration: Math.max(1, Math.round(1000 / fps)) });
+          } finally {
+            if (img && img.close) img.close();
+            try { ff.FS("unlink", name); } catch (_) {}
+          }
+          totalFrames++;
+          if ((globalIndex + 1) % 30 === 0 || globalIndex + 1 === batch.length) {
+            setProgress(68 + ((globalIndex + 1) / batch.length) * 14, "Montando atlas · " + (globalIndex + 1) + " de " + batch.length + " fotogramas…");
+            await new Promise(resolve => setTimeout(resolve, 0));
+          }
         }
-        totalFrames++;
-        if ((index + 1) % clientBatchSize === 0 || index + 1 === batch.length) {
-          setProgress(68 + ((index + 1) / batch.length) * 14,
-            "Montando atlas · " + (index + 1) + " de " + batch.length + " fotogramas…");
-          await new Promise(resolve => setTimeout(resolve, 0));
-        }
+        const blob = await new Promise((resolve, reject) => canvas.toBlob(v => v ? resolve(v) : reject(new Error("No se pudo codificar el atlas PNG.")), "image/png"));
+        const base = "spritesheet_" + String(sheetIndex + 1).padStart(3, "0");
+        const filename = "video/" + base + ".png", metadataFilename = "video/" + base + ".json";
+        zip.file(filename, blob, { compression: "STORE" });
+        zip.file(metadataFilename, JSON.stringify({ frames, meta: { app: "IntroAddon Studio", version: "1.0", image: base + ".png", format: "RGBA8888", size: { w: canvas.width, h: canvas.height }, scale: "1" } }));
+        sheetMeta.push({ filename, metadataFilename, width: canvas.width, height: canvas.height, frameCount: sheetBatch.length, columns: cols, rows: actualRows });
+        canvas.width = 1; canvas.height = 1;
+        log("Atlas " + (sheetIndex + 1) + "/" + sheetCount + " listo.");
       }
       if (!totalFrames) throw new Error("FFmpeg no generó fotogramas. Prueba con otro vídeo MP4 o revisa su códec.");
-      const atlasBlob = await new Promise((resolve, reject) => atlasCanvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("No se pudo codificar la imagen atlas PNG.")), "image/png"));
-      const atlasFilename = "video/spritesheet_001.png";
-      zip.file(atlasFilename, atlasBlob, { compression: "STORE" });
-      const atlasJson = {
-        frames: asepriteFrames,
-        meta: { app: "IntroAddon Studio", version: "1.0", image: "spritesheet_001.png", format: "RGBA8888", size: { w: atlasCanvas.width, h: atlasCanvas.height }, scale: "1" }
-      };
-      const atlasJsonFilename = "video/spritesheet_001.json";
-      zip.file(atlasJsonFilename, JSON.stringify(atlasJson));
-      sheetMeta.push({ filename: atlasFilename, metadataFilename: atlasJsonFilename, width: atlasCanvas.width, height: atlasCanvas.height, frameCount: totalFrames, columns: cols, rows });
-      log("Atlas único listo: " + totalFrames + " fotogramas en " + cols + "×" + rows + " celdas.");
-      setProgress(82, "Atlas único preparado…");
+      setProgress(82, "Atlas enlazados preparados…");
 
       const config = {
         schemaVersion: 1,
@@ -334,8 +324,8 @@
       };
       config.runtime = {
         addonFormat: "mcaddon",
-        visualPlayback: "Bedrock JSON UI flip_book con tiras horizontales de una fila",
-        soundEvent: "introaddon.cinematic_intro",
+        visualPlayback: "Bedrock JSON UI aseprite_flip_book con atlas múltiples enlazados por eventos",
+        soundEvent: "introaddon:cinematic_intro",
         limitations: [
           "La UI visual comienza cuando carga el HUD de cada cliente.",
           "El modo grupal espera para iniciar el audio, pero no sincroniza de forma fiable el comienzo visual entre clientes.",
@@ -375,7 +365,7 @@
         const texName = "spritesheet_" + String(n).padStart(3, "0");
         const animName = "sheet_" + n + "_uv";
         const startEvent = "introaddon_start_sheet_" + n;
-        const nextEvent = "introaddon_finish";
+        const nextEvent = i < sheetMeta.length - 1 ? "introaddon_start_sheet_" + (n + 1) : "introaddon_finish";
         const pngBytes = await zip.file(sheet.filename).async("uint8array");
         rpZip.file("textures/ui/intro/" + texName + ".png", pngBytes, { binary: true, compression: "STORE" });
         const metadataBytes = await zip.file(sheet.metadataFilename).async("uint8array");
@@ -461,9 +451,9 @@
       rpZip.file("sounds/sound_definitions.json", JSON.stringify({
         format_version: "1.20.20",
         sound_definitions: {
-          "introaddon.cinematic_intro": {
-            category: "ui",
-            sounds: [{ name: "sounds/intro", stream: true, volume: 1.0, load_on_low_memory: true, is3D: false }]
+          "introaddon:cinematic_intro": {
+            category: "music",
+            sounds: [{ name: "sounds/intro", stream: true, volume: 1.0, load_on_low_memory: true, is3D: false, allow_concurrent_streaming: true }]
           }
         }
       }, null, 2));
@@ -472,7 +462,7 @@
         'import { world, system, HudVisibility, HudElement } from "@minecraft/server";',
         'import { ModalFormData } from "@minecraft/server-ui";',
         "const CONFIG = " + JSON.stringify(config) + ";",
-        'const SOUND_ID = "introaddon.cinematic_intro";',
+        'const SOUND_ID = "introaddon:cinematic_intro";',
         'let menuShown = false;',
         'let menuPending = false;',
         'let menuAttempts = 0;',
