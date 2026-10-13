@@ -2,7 +2,8 @@
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const state = { file: null, previewUrl: null, ffmpeg: null, busy: false, outputBlob: null, assetBlob: null, outputName: "IntroAddon_Custom.mcaddon", assetName: "IntroAddon_Resources.zip", duration: 0, sourceWidth: 0, sourceHeight: 0 };\n  window.addEventListener("error", event => { const message = event && event.message ? event.message : "Error inesperado del navegador"; try { setStatus("Error de la página: " + message + ". Recarga la web e inténtalo otra vez.", "error"); } catch (_) {} });
+  const state = { file: null, previewUrl: null, ffmpeg: null, busy: false, outputBlob: null, assetBlob: null, outputName: "IntroAddon_Custom.mcaddon", assetName: "IntroAddon_Resources.zip", duration: 0, sourceWidth: 0, sourceHeight: 0 };
+  window.addEventListener("error", event => { const message = event && event.message ? event.message : "Error inesperado del navegador"; try { setStatus("Error de la página: " + message + ". Recarga la web e inténtalo otra vez.", "error"); } catch (_) {} });
   const setStatus = (message, kind = "") => { $("status").textContent = message; $("status").className = "status" + (kind ? " " + kind : ""); };
   const setProgress = (percent, message) => {
     $("progressWrap").classList.remove("hidden");
@@ -68,7 +69,11 @@
       (duration ? duration.toFixed(2) + " s" : "duración por detectar") + " · Recomendado: " +
       w + "×" + h + " px, " + fps + " FPS, hojas de " + cols + "×" + rows + " fotogramas.";
   }
-  $("videoFile").addEventListener("change", e => {\n    const file = e.target && e.target.files ? e.target.files[0] : null;\n    acceptFile(file);\n  });\n  $("videoFile").addEventListener("cancel", () => setStatus("Selección cancelada. Pulsa el selector para elegir un vídeo.", ""));
+  $("videoFile").addEventListener("change", e => {
+    const file = e.target && e.target.files ? e.target.files[0] : null;
+    acceptFile(file);
+  });
+  $("videoFile").addEventListener("cancel", () => setStatus("Selección cancelada. Pulsa el selector para elegir un vídeo.", ""));
   const drop = $("dropzone");
   ["dragenter", "dragover"].forEach(type => drop.addEventListener(type, e => { e.preventDefault(); drop.classList.add("dragging"); }));
   ["dragleave", "drop"].forEach(type => drop.addEventListener(type, e => { e.preventDefault(); drop.classList.remove("dragging"); }));
