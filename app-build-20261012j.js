@@ -20,6 +20,22 @@
   const makeUuid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 3 | 8)).toString(16); }));
   const fileBytes = async (file) => new Uint8Array(await file.arrayBuffer());
   const bytesLabel = (n) => n < 1024 * 1024 ? (n / 1024).toFixed(1) + " KB" : (n / 1024 / 1024).toFixed(2) + " MB";
+
+  const scriptLoads = new Map();
+  function loadScript(url, ready) {
+    if (ready()) return Promise.resolve();
+    if (scriptLoads.has(url)) return scriptLoads.get(url);
+    const promise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = url;
+      script.async = true;
+      script.onload = () => ready() ? resolve() : reject(new Error("La biblioteca se descargó, pero no quedó disponible."));
+      script.onerror = () => reject(new Error("No se pudo descargar una biblioteca externa. Comprueba tu conexión y vuelve a intentarlo."));
+      document.head.appendChild(script);
+    }).catch(error => { scriptLoads.delete(url); throw error; });
+    scriptLoads.set(url, promise);
+    return promise;
+  }
   const readNumber = (id, min, max) => {
     const n = Number($(id).value);
     if (!Number.isFinite(n) || n < min || n > max) throw new Error($(id).previousElementSibling?.textContent + " debe estar entre " + min + " y " + max + ".");
@@ -89,7 +105,10 @@
   async function getFFmpeg() {
     if (state.ffmpeg) return state.ffmpeg;
     if (!window.FFmpeg || typeof window.FFmpeg.createFFmpeg !== "function") {
-      throw new Error("No se pudo cargar la biblioteca FFmpeg. Recarga la página y vuelve a intentarlo.");
+      await loadScript("https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js", () => !!(window.FFmpeg && typeof window.FFmpeg.createFFmpeg === "function"));
+    }
+    if (!window.FFmpeg || typeof window.FFmpeg.createFFmpeg !== "function") {
+      throw new Error("FFmpeg no está disponible. Comprueba tu conexión e inténtalo otra vez.");
     }
     log("Preparando FFmpeg.wasm 0.11.6 con core-st 0.11.1 (un solo hilo, sin SharedArrayBuffer)…");
     log("Compatibilidad del navegador: SharedArrayBuffer=" + (typeof SharedArrayBuffer !== "undefined" ? "disponible" : "no disponible") + ". Se usa core-st para no depender de él.");
@@ -201,7 +220,11 @@
       let totalFrames = 0;
       let sheetFrames = [];
       let sheetIndex = 0;
-      const zip = new JSZip();
+      if (typeof window.JSZip !== "function") {
+        await loadScript("https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js", () => typeof window.JSZip === "function");
+      }
+      if (typeof window.JSZip !== "function") throw new Error("No se pudo cargar JSZip para empaquetar los recursos. Comprueba tu conexión e inténtalo otra vez.");
+      const zip = new window.JSZip();
       zip.file("audio/intro.ogg", audioData, { binary: true, compression: "STORE" });
       const flushSheet = async () => {
         if (!sheetFrames.length) return;
