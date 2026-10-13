@@ -166,7 +166,7 @@
     state.busy = true;
     $("generate").disabled = true;
     $("log").textContent = "";
-    log("Versión de procesamiento: atlas Aseprite múltiples + audio OGG namespaced · build 2026-10-13-a");
+    log("Versión de procesamiento: flip_book nativo en tiras horizontales + audio conservado · build 2026-10-13-b");
     $("progressWrap").classList.remove("hidden");
     $("downloadAgain").classList.add("hidden");
     let ff;
@@ -257,53 +257,45 @@
       const maxCols = Math.floor(4096 / frameW);
       const maxRows = Math.floor(4096 / frameH);
       if (maxCols < 1 || maxRows < 1) throw new Error("Cada fotograma debe caber en 4096 × 4096 px.");
-      // Atlas Aseprite múltiples: ninguna textura supera 4096×4096 y cada hoja se enlaza con la siguiente.
+      // Enfoque nativo de Bedrock: tiras horizontales con flip_book, sin parser Aseprite.
       cols = Math.min(maxCols, Math.max(1, requestedCols));
-      rows = maxRows;
-      capacity = cols * rows;
+      rows = 1;
+      capacity = cols;
       const sheetCount = Math.ceil(batch.length / capacity);
-      log("Extracción completada: " + batch.length + " fotogramas. Se crearán " + sheetCount + " atlas de hasta " + cols + "×" + rows + " celdas.");
+      log("Extracción completada: " + batch.length + " fotogramas. Se crearán " + sheetCount + " tiras horizontales para flip_book.");
       for (let sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++) {
         const first = sheetIndex * capacity;
         const sheetBatch = batch.slice(first, first + capacity);
-        const actualRows = Math.ceil(sheetBatch.length / cols);
         const canvas = document.createElement("canvas");
-        canvas.width = frameW * cols; canvas.height = frameH * actualRows;
+        canvas.width = frameW * sheetBatch.length; canvas.height = frameH;
+        if (canvas.width > 4096 || canvas.height > 4096) throw new Error("La tira horizontal excede 4096 × 4096 px; reduce el ancho del fotograma.");
         const ctx = canvas.getContext("2d", { alpha: true });
-        if (!ctx) throw new Error("No se pudo crear el atlas " + (sheetIndex + 1) + ".");
-        const frames = [];
+        if (!ctx) throw new Error("No se pudo crear la tira de fotogramas.");
         for (let localIndex = 0; localIndex < sheetBatch.length; localIndex++) {
           const name = sheetBatch[localIndex], globalIndex = first + localIndex;
           let img;
           try {
             img = await createImageBitmap(new Blob([ff.FS("readFile", name)], { type: "image/jpeg" }));
-            const x = (localIndex % cols) * frameW, y = Math.floor(localIndex / cols) * frameH;
-            ctx.drawImage(img, x, y, frameW, frameH);
-            frames.push({ filename: "frame_" + String(globalIndex + 1).padStart(6, "0") + ".png",
-              frame: { x, y, w: frameW, h: frameH }, rotated: false, trimmed: false,
-              spriteSourceSize: { x: 0, y: 0, w: frameW, h: frameH },
-              sourceSize: { w: frameW, h: frameH }, duration: Math.max(1, Math.round(1000 / fps)) });
+            ctx.drawImage(img, localIndex * frameW, 0, frameW, frameH);
           } finally {
             if (img && img.close) img.close();
             try { ff.FS("unlink", name); } catch (_) {}
           }
           totalFrames++;
           if ((globalIndex + 1) % 30 === 0 || globalIndex + 1 === batch.length) {
-            setProgress(68 + ((globalIndex + 1) / batch.length) * 14, "Montando atlas · " + (globalIndex + 1) + " de " + batch.length + " fotogramas…");
+            setProgress(68 + ((globalIndex + 1) / batch.length) * 14, "Construyendo tiras · " + (globalIndex + 1) + " de " + batch.length + " fotogramas…");
             await new Promise(resolve => setTimeout(resolve, 0));
           }
         }
-        const blob = await new Promise((resolve, reject) => canvas.toBlob(v => v ? resolve(v) : reject(new Error("No se pudo codificar el atlas PNG.")), "image/png"));
-        const base = "spritesheet_" + String(sheetIndex + 1).padStart(3, "0");
-        const filename = "video/" + base + ".png", metadataFilename = "video/" + base + ".json";
+        const blob = await new Promise((resolve, reject) => canvas.toBlob(v => v ? resolve(v) : reject(new Error("No se pudo codificar la tira PNG.")), "image/png"));
+        const filename = "video/spritesheet_" + String(sheetIndex + 1).padStart(3, "0") + ".png";
         zip.file(filename, blob, { compression: "STORE" });
-        zip.file(metadataFilename, JSON.stringify({ frames, meta: { app: "IntroAddon Studio", version: "1.0", image: base + ".png", format: "RGBA8888", size: { w: canvas.width, h: canvas.height }, scale: "1" } }));
-        sheetMeta.push({ filename, metadataFilename, width: canvas.width, height: canvas.height, frameCount: sheetBatch.length, columns: cols, rows: actualRows });
+        sheetMeta.push({ filename, width: canvas.width, height: canvas.height, frameCount: sheetBatch.length, columns: sheetBatch.length, rows: 1 });
         canvas.width = 1; canvas.height = 1;
-        log("Atlas " + (sheetIndex + 1) + "/" + sheetCount + " listo.");
+        log("Tira " + (sheetIndex + 1) + "/" + sheetCount + " lista (" + sheetBatch.length + " fotogramas).");
       }
       if (!totalFrames) throw new Error("FFmpeg no generó fotogramas. Prueba con otro vídeo MP4 o revisa su códec.");
-      setProgress(82, "Atlas enlazados preparados…");
+      setProgress(82, "Tiras de animación preparadas…");
 
       const config = {
         schemaVersion: 1,
@@ -324,7 +316,7 @@
       };
       config.runtime = {
         addonFormat: "mcaddon",
-        visualPlayback: "Bedrock JSON UI aseprite_flip_book con atlas múltiples enlazados por eventos",
+        visualPlayback: "Bedrock JSON UI flip_book con tiras horizontales enlazadas por eventos",
         soundEvent: "introaddon:cinematic_intro",
         limitations: [
           "La UI visual comienza cuando carga el HUD de cada cliente.",
@@ -368,11 +360,12 @@
         const nextEvent = i < sheetMeta.length - 1 ? "introaddon_start_sheet_" + (n + 1) : "introaddon_finish";
         const pngBytes = await zip.file(sheet.filename).async("uint8array");
         rpZip.file("textures/ui/intro/" + texName + ".png", pngBytes, { binary: true, compression: "STORE" });
-        const metadataBytes = await zip.file(sheet.metadataFilename).async("uint8array");
-        rpZip.file("textures/ui/intro/" + texName + ".json", metadataBytes, { binary: true, compression: "STORE" });
         uiAnimations[animName] = {
-          anim_type: "aseprite_flip_book",
+          anim_type: "flip_book",
           initial_uv: [0, 0],
+          frame_count: sheet.frameCount,
+          frame_step: frameW,
+          fps: fps,
           reversible: false,
           resettable: false,
           easing: "linear",
