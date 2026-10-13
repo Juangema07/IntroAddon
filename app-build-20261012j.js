@@ -380,7 +380,7 @@
           texture: "textures/ui/intro/" + texName,
           size: ["100%", "100%"], uv_size: [frameW, frameH],
           uv: "@introaddon." + animName, anchor_from: "center", anchor_to: "center",
-          keep_ratio: true, layer: 100 + n, disable_anim_fast_forward: true
+          keep_ratio: true, layer: 1000002 + n, disable_anim_fast_forward: true
         };
         if (i > 0) {
           const alphaName = "sheet_" + n + "_alpha";
@@ -420,12 +420,12 @@
         type: "image", texture: "textures/ui/intro/black",
         size: ["100%", "100%"], keep_ratio: false,
         anchor_from: "center", anchor_to: "center",
-        alpha: "@introaddon.black_fade", layer: 1
+        alpha: "@introaddon.black_fade", layer: 1000001
       } });
       const introUi = {
         namespace: "introaddon", ...uiAnimations,
         overlay: {
-          type: "panel", size: ["100%", "100%"], layer: 10000, controls: uiControls,
+          type: "panel", size: ["100%", "100%"], layer: 1000000, controls: uiControls,
           // La intro solo tapa el HUD cuando el script activa el título señal.
           bindings: [
             { binding_name: "#hud_title_text_string" },
@@ -439,7 +439,7 @@
         namespace: "hud",
         root_panel: { modifications: [{
           array_name: "controls", operation: "insert_front",
-          value: { "introaddon_overlay@introaddon.overlay": { layer: 10000 } }
+          value: { "introaddon_overlay@introaddon.overlay": { layer: 1000000 } }
         }] }
       }, null, 2));
       const audioPath = actualAudio.endsWith(".ogg") ? "sounds/intro.ogg" : "sounds/intro.wav";
@@ -475,7 +475,7 @@
         '  if (menuShown) return;',
         '  menuShown = true;',
         '  try {',
-        '    const form = new ModalFormData().title("IntroAddon - configuración").dropdown("Modo de reproducción", ["Individual - cada jugador al entrar", "Grupal - esperar al grupo"], 0).slider("Volumen de audio (%)", 0, 100, { valueStep: 5, defaultValue: 100 }).slider("Jugadores necesarios (modo grupal)", 1, 20, { valueStep: 1, defaultValue: 2 });',
+        '    const form = new ModalFormData().title("IntroAddon - configuración").dropdown("Modo de reproducción", ["Individual - cada jugador al entrar", "Grupal - esperar al grupo"], 0).slider("Volumen de audio (%)", 0, 100, 5, 100).slider("Jugadores necesarios (modo grupal)", 1, 20, 1, 2);',
         '    const answer = await form.show(player);',
         '    if (answer.canceled || !answer.formValues) { playbackMode = "per_player"; soundVolume = 1.0; minimumPlayers = 2; modeSelected = true; player.sendMessage("§eIntroAddon: se usarán los valores predeterminados."); system.runTimeout(() => startIntro(player), 40); return; }',
         '    playbackMode = Number(answer.formValues[0]) === 0 ? "per_player" : "group_once";',
