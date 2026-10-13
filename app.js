@@ -175,11 +175,15 @@
       const fps = readNumber("fps", 1, 60);
       const frameW = readNumber("frameWidth", 16, 4096);
       const frameH = readNumber("frameHeight", 16, 4096);
-      const cols = readNumber("columns", 1, 32);
-      const rows = readNumber("rows", 1, 32);
-      const capacity = cols * rows;
-      if (frameW * cols > 4096 || frameH * rows > 4096) throw new Error("El spritesheet superaría 4096 px en uno de sus lados. Reduce la resolución, columnas o filas para mantener compatibilidad con Bedrock móvil.");
-      if (frameW * frameH * capacity > 180000000) throw new Error("La hoja sería demasiado grande para un procesamiento seguro. Reduce la resolución, filas o columnas.");
+      const requestedCols = readNumber("columns", 1, 32);
+      const requestedRows = readNumber("rows", 1, 32);
+      // Técnica alternativa: strips horizontales para el anim_type flip_book nativo.
+      // Cada fotograma avanza solo en X; no depende del parser Aseprite ni de atlas multilínea.
+      const cols = Math.max(1, Math.min(requestedCols * requestedRows, Math.floor(4096 / frameW), 32));
+      const rows = 1;
+      const capacity = cols;
+      if (frameW * cols > 4096 || frameH > 4096) throw new Error("La tira horizontal superaría 4096 px. Reduce la resolución del fotograma.");
+      if (frameW * frameH * capacity > 180000000) throw new Error("La tira sería demasiado grande para un procesamiento seguro. Reduce la resolución o la cantidad de fotogramas por tira.");
       setStatus("Preparando bibliotecas de generación…");
       if (typeof window.JSZip !== "function") {
         await loadScript("https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js", () => typeof window.JSZip === "function");
@@ -300,11 +304,11 @@
           frameWidth: frameW, frameHeight: frameH, columns: cols, rows: rows,
           framesPerSheet: capacity, format: imageFormat, totalFrames: totalFrames, sheets: sheetMeta
         },
-        note: "Los recursos ya están preparados. Minecraft no debe convertir vídeo ni audio; el reproductor consume las rutas y metadatos de este manifiesto."
+        note: "Fotogramas empaquetados en tiras horizontales de una sola fila para usar flip_book nativo; el audio se entrega como OGG Vorbis en el Resource Pack."
       };
       config.runtime = {
         addonFormat: "mcaddon",
-        visualPlayback: "Bedrock JSON UI aseprite_flip_book",
+        visualPlayback: "Bedrock JSON UI flip_book con tiras horizontales de una fila",
         soundEvent: "introaddon:cinematic_intro",
         limitations: [
           "La UI visual comienza cuando carga el HUD de cada cliente.",
@@ -346,31 +350,16 @@
         const animName = "sheet_" + n + "_uv";
         const startEvent = "introaddon_start_sheet_" + n;
         const nextEvent = n < sheetMeta.length ? "introaddon_start_sheet_" + (n + 1) : "introaddon_finish";
-        const frames = [];
-        for (let f = 0; f < sheet.frameCount; f++) {
-          frames.push({
-            filename: "frame_" + String((i * capacity) + f + 1).padStart(6, "0"),
-            frame: { x: (f % cols) * frameW, y: Math.floor(f / cols) * frameH, w: frameW, h: frameH },
-            rotated: false, trimmed: false,
-            spriteSourceSize: { x: 0, y: 0, w: frameW, h: frameH },
-            sourceSize: { w: frameW, h: frameH },
-            duration: Math.max(1, Math.round(1000 / fps))
-          });
-        }
-        const aseprite = {
-          frames,
-          meta: {
-            app: "IntroAddon Studio", version: "1.0", image: texName + ".png", format: "RGBA8888",
-            size: { w: frameW * cols, h: frameH * rows }, scale: "1",
-            frameTags: [{ name: "intro", from: 0, to: sheet.frameCount - 1, direction: "forward" }],
-            layers: [{ name: "Intro", opacity: 255, blendMode: "normal" }], slices: []
-          }
-        };
         const pngBytes = await zip.file(sheet.filename).async("uint8array");
         rpZip.file("textures/ui/intro/" + texName + ".png", pngBytes, { binary: true, compression: "STORE" });
-        rpZip.file("textures/ui/intro/" + texName + ".json", JSON.stringify(aseprite, null, 2));
         uiAnimations[animName] = {
-          anim_type: "aseprite_flip_book", initial_uv: [0, 0],
+          anim_type: "flip_book",
+          initial_uv: [0, 0],
+          fps: fps,
+          frame_count: sheet.frameCount,
+          frame_step: frameW,
+          reversible: false,
+          resettable: true,
           ...(i > 0 ? { play_event: startEvent } : {}),
           end_event: nextEvent
         };
@@ -448,7 +437,7 @@
         format_version: "1.20.20",
         sound_definitions: {
           "introaddon:cinematic_intro": {
-            category: "ui",
+            category: "music",
             sounds: [{
               name: audioPath.replace(/\.(ogg|wav)$/i, ""),
               volume: 1.0, pitch: 1.0, stream: true,
@@ -472,7 +461,7 @@
         'let minimumPlayers = 2;',
         'let soundVolume = 1.0;',
         'let groupSoundStarted = false;',
-        'function startIntro(player) { const ticks = Math.max(20, Math.ceil(Number(CONFIG.playback.durationSeconds || 5) * 20) + 12); const hidden = [HudElement.TouchControls, HudElement.Hotbar, HudElement.Crosshair, HudElement.Health, HudElement.Hunger, HudElement.Armor, HudElement.ProgressBar, HudElement.AirBubbles, HudElement.HorseHealth, HudElement.StatusEffects, HudElement.ItemText, HudElement.PaperDoll, HudElement.ToolTips]; try { player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, hidden); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudieron ocultar todos los controles: " + String(e)); } catch (_) {} } try { player.onScreenDisplay.setTitle("INTROADDON_START", { fadeInDuration: 0, stayDuration: ticks, fadeOutDuration: 0 }); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudo activar la pantalla de intro: " + String(e)); } catch (_) {} } try { player.playSound(SOUND_ID, { volume: soundVolume, pitch: 1.0 }); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudo reproducir el audio: " + String(e)); } catch (_) {} } system.runTimeout(() => { try { player.onScreenDisplay.setHudVisibility(HudVisibility.Reset, hidden); } catch (_) {} }, ticks); }',
+        'function startIntro(player) { const ticks = Math.max(20, Math.ceil(Number(CONFIG.playback.durationSeconds || 5) * 20) + 12); const hidden = [HudElement.TouchControls, HudElement.Hotbar, HudElement.Crosshair, HudElement.Health, HudElement.Hunger, HudElement.Armor, HudElement.ProgressBar, HudElement.AirBubbles, HudElement.HorseHealth, HudElement.StatusEffects, HudElement.ItemText, HudElement.PaperDoll, HudElement.ToolTips]; try { player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, hidden); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudieron ocultar todos los controles: " + String(e)); } catch (_) {} } try { player.onScreenDisplay.setTitle("INTROADDON_START", { fadeInDuration: 0, stayDuration: ticks, fadeOutDuration: 0 }); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudo activar la pantalla de intro: " + String(e)); } catch (_) {} } system.runTimeout(() => { try { const soundInstance = player.playSound(SOUND_ID, { volume: soundVolume, pitch: 1.0 }); if (!soundInstance) player.sendMessage("§cIntroAddon: Minecraft no devolvió una instancia de audio. Reinicia el cliente y comprueba que el pack de recursos esté activado."); } catch (e) { try { player.sendMessage("§cIntroAddon: falló player.playSound: " + String(e)); } catch (_) {} } }, 10); system.runTimeout(() => { try { player.onScreenDisplay.setHudVisibility(HudVisibility.Reset, hidden); } catch (_) {} }, ticks); }',
         'function startGroupAudio() { const runId = system.runInterval(() => { const players = world.getAllPlayers(); if (!groupSoundStarted && players.length >= minimumPlayers) { groupSoundStarted = true; system.clearRun(runId); system.runTimeout(() => { for (const p of world.getAllPlayers()) startIntro(p); }, 40); } }, 20); }',
         'async function showFirstPlayerMenu(player) {',
         '  if (menuShown || menuPending || menuAttempts >= 3) return;',
