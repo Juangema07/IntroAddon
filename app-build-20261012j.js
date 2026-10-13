@@ -180,7 +180,11 @@
       const capacity = cols * rows;
       if (frameW * cols > 4096 || frameH * rows > 4096) throw new Error("El spritesheet superaría 4096 px en uno de sus lados. Reduce la resolución, columnas o filas para mantener compatibilidad con Bedrock móvil.");
       if (frameW * frameH * capacity > 180000000) throw new Error("La hoja sería demasiado grande para un procesamiento seguro. Reduce la resolución, filas o columnas.");
-      setStatus("Preparando el procesamiento…");
+      setStatus("Preparando bibliotecas de generación…");
+      if (typeof window.JSZip !== "function") {
+        await loadScript("https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js", () => typeof window.JSZip === "function");
+      }
+      if (typeof window.JSZip !== "function") throw new Error("No se pudo cargar JSZip para empaquetar los recursos. Comprueba tu conexión e inténtalo otra vez.");
       ff = await getFFmpeg();
       const ext = (state.file.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
       const inputName = "input." + ext;
@@ -220,10 +224,6 @@
       let totalFrames = 0;
       let sheetFrames = [];
       let sheetIndex = 0;
-      if (typeof window.JSZip !== "function") {
-        await loadScript("https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js", () => typeof window.JSZip === "function");
-      }
-      if (typeof window.JSZip !== "function") throw new Error("No se pudo cargar JSZip para empaquetar los recursos. Comprueba tu conexión e inténtalo otra vez.");
       const zip = new window.JSZip();
       zip.file("audio/intro.ogg", audioData, { binary: true, compression: "STORE" });
       const flushSheet = async () => {
