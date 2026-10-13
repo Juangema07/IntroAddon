@@ -79,14 +79,7 @@
       (duration ? duration.toFixed(2) + " s" : "duración por detectar") + " · Recomendado: " +
       w + "×" + h + " px, " + fps + " FPS, hojas de " + cols + "×" + rows + " fotogramas.";
   }
-  $("videoFile").addEventListener("change", e => {
-    const file = e.currentTarget && e.currentTarget.files ? e.currentTarget.files[0] : null;
-    if (file) {
-      $("status").textContent = "Archivo detectado: " + file.name + " (" + bytesLabel(file.size) + "). Preparando vista previa…";
-      $("status").className = "status";
-    }
-    acceptFile(file);
-  });
+  window.introAddonSelectFile = acceptFile;
   $("videoFile").addEventListener("cancel", () => setStatus("Selección cancelada. Pulsa el selector para elegir un vídeo.", ""));
   const drop = $("dropzone");
   ["dragenter", "dragover"].forEach(type => drop.addEventListener(type, e => { e.preventDefault(); drop.classList.add("dragging"); }));
