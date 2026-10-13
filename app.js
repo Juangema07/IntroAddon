@@ -442,7 +442,7 @@
           "introaddon:cinematic_intro": {
             category: "music",
             sounds: [{
-              name: audioPath.replace(/^sounds\//, "").replace(/\.(ogg|wav)$/i, ""),
+              name: audioPath.replace(/\.(ogg|wav)$/i, ""),
               volume: 1.0, pitch: 1.0, stream: true,
               is3D: false, load_on_low_memory: true,
               allow_concurrent_streaming: true
