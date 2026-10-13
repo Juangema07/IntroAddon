@@ -27,7 +27,14 @@
   };
 
   function acceptFile(file) {
-    if (!file) return;
+    if (!file) {
+      setStatus("No se recibió ningún archivo. Intenta seleccionarlo otra vez.", "error");
+      return;
+    }
+    if (file.size <= 0) {
+      setStatus("El archivo seleccionado está vacío. Prueba con otro vídeo.", "error");
+      return;
+    }
     state.file = file;
     state.duration = 0; state.sourceWidth = 0; state.sourceHeight = 0;
     state.outputBlob = null;
@@ -41,6 +48,9 @@
       state.sourceWidth = $("preview").videoWidth || 0;
       state.sourceHeight = $("preview").videoHeight || 0;
       autoConfigure();
+    };
+    $("preview").onerror = () => {
+      setStatus("Archivo seleccionado: " + file.name + ". No se pudo mostrar la vista previa; intenta generar o prueba un MP4 H.264.", "error");
     };
     $("preview").src = state.previewUrl;
     $("preview").classList.remove("hidden");
@@ -70,7 +80,11 @@
       w + "×" + h + " px, " + fps + " FPS, hojas de " + cols + "×" + rows + " fotogramas.";
   }
   $("videoFile").addEventListener("change", e => {
-    const file = e.target && e.target.files ? e.target.files[0] : null;
+    const file = e.currentTarget && e.currentTarget.files ? e.currentTarget.files[0] : null;
+    if (file) {
+      $("status").textContent = "Archivo detectado: " + file.name + " (" + bytesLabel(file.size) + "). Preparando vista previa…";
+      $("status").className = "status";
+    }
     acceptFile(file);
   });
   $("videoFile").addEventListener("cancel", () => setStatus("Selección cancelada. Pulsa el selector para elegir un vídeo.", ""));
@@ -517,4 +531,5 @@
   $("generate").addEventListener("click", run);
   $("downloadAgain").addEventListener("click", downloadOutput);
   $("downloadAssets").addEventListener("click", downloadAssets);
+  setStatus("Web cargada. Selecciona un vídeo para comenzar.");
 })();
