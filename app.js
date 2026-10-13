@@ -321,20 +321,20 @@
       const rpZip = new JSZip(), bpZip = new JSZip();
       rpZip.file("manifest.json", JSON.stringify({
         format_version: 2,
-        header: { name: "IntroAddon Resources", description: "Recursos cinematográficos generados por IntroAddon Studio.", uuid: rpUuid, version: [1,0,0], min_engine_version: [1,21,0] },
+        header: { name: "IntroAddon Resources", description: "Recursos cinematográficos generados por IntroAddon Studio.", uuid: rpUuid, version: [1,0,0], min_engine_version: [1,26,50] },
         modules: [{ type: "resources", uuid: rpModuleUuid, version: [1,0,0] }]
       }, null, 2));
       bpZip.file("manifest.json", JSON.stringify({
         format_version: 2,
-        header: { name: "IntroAddon Behavior", description: "Audio y configuración de IntroAddon.", uuid: bpUuid, version: [1,0,0], min_engine_version: [1,21,0] },
+        header: { name: "IntroAddon Behavior", description: "Audio y configuración de IntroAddon.", uuid: bpUuid, version: [1,0,0], min_engine_version: [1,26,50] },
         modules: [
           { type: "data", uuid: bpDataUuid, version: [1,0,0] },
           { type: "script", language: "javascript", entry: "scripts/main.js", uuid: bpScriptUuid, version: [1,0,0] }
         ],
         dependencies: [
           { uuid: rpUuid, version: [1,0,0] },
-          { module_name: "@minecraft/server", version: "1.13.0" },
-          { module_name: "@minecraft/server-ui", version: "1.3.0" }
+          { module_name: "@minecraft/server", version: "2.10.0" },
+          { module_name: "@minecraft/server-ui", version: "2.1.0" }
         ]
       }, null, 2));
 
@@ -349,7 +349,7 @@
         const frames = [];
         for (let f = 0; f < sheet.frameCount; f++) {
           frames.push({
-            filename: "frame_" + String((i * capacity) + f + 1).padStart(6, "0") + ".png",
+            filename: "frame_" + String((i * capacity) + f + 1).padStart(6, "0"),
             frame: { x: (f % cols) * frameW, y: Math.floor(f / cols) * frameH, w: frameW, h: frameH },
             rotated: false, trimmed: false,
             spriteSourceSize: { x: 0, y: 0, w: frameW, h: frameH },
@@ -370,7 +370,7 @@
         rpZip.file("textures/ui/intro/" + texName + ".png", pngBytes, { binary: true, compression: "STORE" });
         rpZip.file("textures/ui/intro/" + texName + ".json", JSON.stringify(aseprite, null, 2));
         uiAnimations[animName] = {
-          anim_type: "aseprite_flip_book", initial_uv: [0, 0], fps, frame_count: sheet.frameCount, resettable: true,
+          anim_type: "aseprite_flip_book", initial_uv: [0, 0],
           ...(i > 0 ? { play_event: startEvent } : {}),
           end_event: nextEvent
         };
@@ -445,13 +445,14 @@
       const audioPath = actualAudio.endsWith(".ogg") ? "sounds/intro.ogg" : "sounds/intro.wav";
       rpZip.file(audioPath, audioData, { binary: true, compression: "STORE" });
       rpZip.file("sounds/sound_definitions.json", JSON.stringify({
-        format_version: "1.14.0",
+        format_version: "1.20.20",
         sound_definitions: {
           "introaddon:cinematic_intro": {
-            category: "neutral",
+            category: "ui",
             sounds: [{
               name: audioPath.replace(/\.(ogg|wav)$/i, ""),
               volume: 1.0, pitch: 1.0, stream: true,
+              is3D: false, load_on_low_memory: true,
               allow_concurrent_streaming: true
             }]
           }
@@ -477,7 +478,7 @@
         '  if (menuShown || menuPending || menuAttempts >= 3) return;',
         '  menuPending = true; menuAttempts++;',
         '  try {',
-        '    const form = new ModalFormData().title("IntroAddon - configuración").dropdown("Modo de reproducción", ["Individual - cada jugador al entrar", "Grupal - esperar al grupo"], 0).slider("Volumen de audio (%)", 0, 100, 5, 100).slider("Jugadores necesarios (modo grupal)", 1, 20, 1, 2);',
+        '    const form = new ModalFormData().title("IntroAddon - configuración").dropdown("Modo de reproducción", ["Individual - cada jugador al entrar", "Grupal - esperar al grupo"], 0).slider("Volumen de audio (%)", 0, 100, { valueStep: 5, defaultValue: 100 }).slider("Jugadores necesarios (modo grupal)", 1, 20, { valueStep: 1, defaultValue: 2 });',
         '    const answer = await form.show(player);',
         '    menuShown = true; menuPending = false;',
         '    if (answer.canceled || !answer.formValues) { playbackMode = "per_player"; soundVolume = 1.0; minimumPlayers = 2; modeSelected = true; player.sendMessage("§eIntroAddon: se usarán los valores predeterminados."); system.runTimeout(() => startIntro(player), 40); return; }',
