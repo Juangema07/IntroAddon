@@ -360,12 +360,15 @@
           frame_step: frameW,
           reversible: false,
           resettable: true,
+          looping: false,
+          easing: "linear",
+          wait_until_rendered_to_play: true,
           ...(i > 0 ? { play_event: startEvent } : {}),
           end_event: nextEvent
         };
         const control = {
           type: "image",
-          // El atlas Aseprite se referencia por su ruta base, sin extensión.
+          // La textura es una tira horizontal; flip_book avanza por fotogramas en X.
           texture: "textures/ui/intro/" + texName,
           size: ["100%", "100%"], uv_size: [frameW, frameH],
           uv: "@introaddon." + animName, anchor_from: "center", anchor_to: "center",
@@ -439,7 +442,7 @@
           "introaddon:cinematic_intro": {
             category: "music",
             sounds: [{
-              name: audioPath.replace(/\.(ogg|wav)$/i, ""),
+              name: audioPath.replace(/^sounds\//, "").replace(/\.(ogg|wav)$/i, ""),
               volume: 1.0, pitch: 1.0, stream: true,
               is3D: false, load_on_low_memory: true,
               allow_concurrent_streaming: true
@@ -461,7 +464,7 @@
         'let minimumPlayers = 2;',
         'let soundVolume = 1.0;',
         'let groupSoundStarted = false;',
-        'function startIntro(player) { const ticks = Math.max(20, Math.ceil(Number(CONFIG.playback.durationSeconds || 5) * 20) + 12); const hidden = [HudElement.TouchControls, HudElement.Hotbar, HudElement.Crosshair, HudElement.Health, HudElement.Hunger, HudElement.Armor, HudElement.ProgressBar, HudElement.AirBubbles, HudElement.HorseHealth, HudElement.StatusEffects, HudElement.ItemText, HudElement.PaperDoll, HudElement.ToolTips]; try { player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, hidden); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudieron ocultar todos los controles: " + String(e)); } catch (_) {} } try { player.onScreenDisplay.setTitle("INTROADDON_START", { fadeInDuration: 0, stayDuration: ticks, fadeOutDuration: 0 }); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudo activar la pantalla de intro: " + String(e)); } catch (_) {} } system.runTimeout(() => { let played = false; try { player.playSound(SOUND_ID, { volume: soundVolume, pitch: 1.0 }); played = true; } catch (e) { try { player.sendMessage("§eIntroAddon: player.playSound falló; probando comando de sonido: " + String(e)); } catch (_) {} } if (!played) { try { player.runCommand("playsound " + SOUND_ID + " @s ~ ~ ~ " + soundVolume + " 1"); played = true; } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudo iniciar el audio. Verifica que el pack de recursos esté activo y que sounds/sound_definitions.json incluya " + SOUND_ID + ". Detalle: " + String(e)); } catch (_) {} } } }, 10); system.runTimeout(() => { try { player.onScreenDisplay.setHudVisibility(HudVisibility.Reset, hidden); } catch (_) {} }, ticks); }',
+        'function startIntro(player) { const ticks = Math.max(20, Math.ceil(Number(CONFIG.playback.durationSeconds || 5) * 20) + 12); const hidden = [HudElement.TouchControls, HudElement.Hotbar, HudElement.Crosshair, HudElement.Health, HudElement.Hunger, HudElement.Armor, HudElement.ProgressBar, HudElement.AirBubbles, HudElement.HorseHealth, HudElement.StatusEffects, HudElement.ItemText, HudElement.PaperDoll, HudElement.ToolTips]; try { player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, hidden); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudieron ocultar todos los controles: " + String(e)); } catch (_) {} } try { player.onScreenDisplay.setTitle("INTROADDON_START", { fadeInDuration: 0, stayDuration: ticks, fadeOutDuration: 0 }); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudo activar la pantalla de intro: " + String(e)); } catch (_) {} } system.runTimeout(() => { try { player.playSound(SOUND_ID, { volume: soundVolume, pitch: 1.0 }); } catch (e) { try { player.sendMessage("§cIntroAddon: falló player.playSound. Verifica que el pack de recursos esté activo y que sounds/sound_definitions.json incluya " + SOUND_ID + ". Detalle: " + String(e)); } catch (_) {} } }, 10); system.runTimeout(() => { try { player.onScreenDisplay.setHudVisibility(HudVisibility.Reset, hidden); } catch (_) {} }, ticks); }',
         'function startGroupAudio() { const runId = system.runInterval(() => { const players = world.getAllPlayers(); if (!groupSoundStarted && players.length >= minimumPlayers) { groupSoundStarted = true; system.clearRun(runId); system.runTimeout(() => { for (const p of world.getAllPlayers()) startIntro(p); }, 40); } }, 20); }',
         'async function showFirstPlayerMenu(player) {',
         '  if (menuShown || menuPending || menuAttempts >= 3) return;',
