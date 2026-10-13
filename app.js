@@ -441,12 +441,7 @@
         sound_definitions: {
           "introaddon:cinematic_intro": {
             category: "music",
-            sounds: [{
-              name: audioPath.replace(/\.(ogg|wav)$/i, ""),
-              volume: 1.0, pitch: 1.0, stream: true,
-              is3D: false, load_on_low_memory: true,
-              allow_concurrent_streaming: true
-            }]
+            sounds: ["sounds/intro"]
           }
         }
       }, null, 2));
@@ -464,7 +459,7 @@
         'let minimumPlayers = 2;',
         'let soundVolume = 1.0;',
         'let groupSoundStarted = false;',
-        'function startIntro(player) { const ticks = Math.max(20, Math.ceil(Number(CONFIG.playback.durationSeconds || 5) * 20) + 12); const hidden = [HudElement.TouchControls, HudElement.Hotbar, HudElement.Crosshair, HudElement.Health, HudElement.Hunger, HudElement.Armor, HudElement.ProgressBar, HudElement.AirBubbles, HudElement.HorseHealth, HudElement.StatusEffects, HudElement.ItemText, HudElement.PaperDoll, HudElement.ToolTips]; try { player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, hidden); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudieron ocultar todos los controles: " + String(e)); } catch (_) {} } try { player.onScreenDisplay.setTitle("INTROADDON_START", { fadeInDuration: 0, stayDuration: ticks, fadeOutDuration: 0 }); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudo activar la pantalla de intro: " + String(e)); } catch (_) {} } system.runTimeout(() => { let commandError = null; try { player.runCommand("playsound " + SOUND_ID + " @s ~ ~ ~ " + soundVolume + " 1"); } catch (e) { commandError = e; try { player.playSound(SOUND_ID, { volume: soundVolume, pitch: 1.0 }); return; } catch (fallbackError) { try { player.sendMessage("§cIntroAddon: fallaron los dos métodos de audio. Comprueba que el pack de recursos esté activo y que sounds/sound_definitions.json registre " + SOUND_ID + ". Comando: " + String(commandError) + " · API: " + String(fallbackError)); } catch (_) {} } } }, 10); system.runTimeout(() => { try { player.onScreenDisplay.setHudVisibility(HudVisibility.Reset, hidden); } catch (_) {} }, ticks); }',
+        'function startIntro(player) { const ticks = Math.max(20, Math.ceil(Number(CONFIG.playback.durationSeconds || 5) * 20) + 12); const hidden = [HudElement.TouchControls, HudElement.Hotbar, HudElement.Crosshair, HudElement.Health, HudElement.Hunger, HudElement.Armor, HudElement.ProgressBar, HudElement.AirBubbles, HudElement.HorseHealth, HudElement.StatusEffects, HudElement.ItemText, HudElement.PaperDoll, HudElement.ToolTips]; try { player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, hidden); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudieron ocultar todos los controles: " + String(e)); } catch (_) {} } try { player.onScreenDisplay.setTitle("INTROADDON_START", { fadeInDuration: 0, stayDuration: ticks, fadeOutDuration: 0 }); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudo activar la pantalla de intro: " + String(e)); } catch (_) {} } system.runTimeout(() => { let apiError = null; try { player.playSound(SOUND_ID, { volume: soundVolume, pitch: 1.0 }); } catch (e) { apiError = e; try { player.runCommand("playsound " + SOUND_ID + " @s ~ ~ ~ " + soundVolume + " 1"); } catch (commandError) { try { player.sendMessage("§cIntroAddon: no se pudo iniciar el audio. Comprueba que el pack de recursos esté activo y que sounds/intro.ogg exista. API: " + String(apiError) + " · playsound: " + String(commandError)); } catch (_) {} } } }, 10); system.runTimeout(() => { try { player.onScreenDisplay.setHudVisibility(HudVisibility.Reset, hidden); } catch (_) {} }, ticks); }',
         'function startGroupAudio() { const runId = system.runInterval(() => { const players = world.getAllPlayers(); if (!groupSoundStarted && players.length >= minimumPlayers) { groupSoundStarted = true; system.clearRun(runId); system.runTimeout(() => { for (const p of world.getAllPlayers()) startIntro(p); }, 40); } }, 20); }',
         'async function showFirstPlayerMenu(player) {',
         '  if (menuShown || menuPending || menuAttempts >= 3) return;',
