@@ -309,7 +309,7 @@
       config.runtime = {
         addonFormat: "mcaddon",
         visualPlayback: "Bedrock JSON UI flip_book con tiras horizontales de una fila",
-        soundEvent: "introaddon:cinematic_intro",
+        soundEvent: "introaddon.cinematic_intro",
         limitations: [
           "La UI visual comienza cuando carga el HUD de cada cliente.",
           "El modo grupal espera para iniciar el audio, pero no sincroniza de forma fiable el comienzo visual entre clientes.",
@@ -352,17 +352,32 @@
         const nextEvent = n < sheetMeta.length ? "introaddon_start_sheet_" + (n + 1) : "introaddon_finish";
         const pngBytes = await zip.file(sheet.filename).async("uint8array");
         rpZip.file("textures/ui/intro/" + texName + ".png", pngBytes, { binary: true, compression: "STORE" });
+        // Usar el formato Aseprite de Bedrock: cada frame queda descrito explícitamente
+        // en el JSON lateral, evitando depender de la interpretación de una tira flip_book.
+        const asepriteFrames = [];
+        for (let f = 0; f < sheet.frameCount; f++) {
+          asepriteFrames.push({
+            filename: "frame_" + String((i * capacity) + f + 1).padStart(6, "0"),
+            frame: { x: f * frameW, y: 0, w: frameW, h: frameH },
+            rotated: false, trimmed: false,
+            spriteSourceSize: { x: 0, y: 0, w: frameW, h: frameH },
+            sourceSize: { w: frameW, h: frameH },
+            duration: Math.max(1, Math.round(1000 / fps))
+          });
+        }
+        const asepriteData = {
+          frames: asepriteFrames,
+          meta: {
+            app: "IntroAddon Studio", version: "1.0", image: texName + ".png", format: "RGBA8888",
+            size: { w: frameW * cols, h: frameH }, scale: "1",
+            frameTags: [{ name: "intro", from: 0, to: sheet.frameCount - 1, direction: "forward" }],
+            layers: [{ name: "Intro", opacity: 255, blendMode: "normal" }], slices: []
+          }
+        };
+        rpZip.file("textures/ui/intro/" + texName + ".json", JSON.stringify(asepriteData, null, 2));
         uiAnimations[animName] = {
-          anim_type: "flip_book",
+          anim_type: "aseprite_flip_book",
           initial_uv: [0, 0],
-          fps: fps,
-          frame_count: sheet.frameCount,
-          frame_step: frameW,
-          reversible: false,
-          resettable: true,
-          looping: false,
-          easing: "linear",
-          wait_until_rendered_to_play: true,
           ...(i > 0 ? { play_event: startEvent } : {}),
           end_event: nextEvent
         };
@@ -437,11 +452,11 @@
       const audioPath = actualAudio.endsWith(".ogg") ? "sounds/intro.ogg" : "sounds/intro.wav";
       rpZip.file(audioPath, audioData, { binary: true, compression: "STORE" });
       rpZip.file("sounds/sound_definitions.json", JSON.stringify({
-        format_version: "1.20.20",
+        format_version: "1.14.0",
         sound_definitions: {
-          "introaddon:cinematic_intro": {
+          "introaddon.cinematic_intro": {
             category: "music",
-            sounds: ["sounds/intro"]
+            sounds: [{ name: "sounds/intro", stream: true, volume: 1.0, is3D: false }]
           }
         }
       }, null, 2));
@@ -450,7 +465,7 @@
         'import { world, system, HudVisibility, HudElement } from "@minecraft/server";',
         'import { ModalFormData } from "@minecraft/server-ui";',
         "const CONFIG = " + JSON.stringify(config) + ";",
-        'const SOUND_ID = "introaddon:cinematic_intro";',
+        'const SOUND_ID = "introaddon.cinematic_intro";',
         'let menuShown = false;',
         'let menuPending = false;',
         'let menuAttempts = 0;',
