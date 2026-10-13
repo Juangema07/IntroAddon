@@ -372,7 +372,10 @@
           // La textura es una tira horizontal; flip_book avanza por fotogramas en X.
           texture: "textures/ui/intro/" + texName,
           size: ["100%", "100%"], uv_size: [frameW, frameH],
-          uv: "@introaddon." + animName, anchor_from: "center", anchor_to: "center",
+          // flip_book se ejecuta como una animación del control (anims), no como el valor UV.
+          uv: [0, 0],
+          anims: ["@introaddon." + animName],
+          anchor_from: "center", anchor_to: "center",
           keep_ratio: true, layer: 1000002 + n, disable_anim_fast_forward: true
         };
         if (i > 0) {
