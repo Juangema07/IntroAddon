@@ -368,6 +368,11 @@
           ]
         }});
       }
+      // Fondo negro de respaldo: queda detrás de los fotogramas y no los tapa.
+      introControls.unshift({ black_background: {
+        type: "image", size: ["100%", "100%"], anchor_from: "center", anchor_to: "center",
+        texture: "textures/ui/intro/black", layer: 1000001
+      }});
       rpZip.file("textures/ui/intro/black.png", await new Promise((resolve, reject) => {
         const c = document.createElement("canvas"); c.width = 1; c.height = 1;
         const cx = c.getContext("2d", { alpha: false });
