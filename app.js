@@ -262,7 +262,7 @@
         const first = sheetIndex * sheetCapacity;
         const sheetBatch = batch.slice(first, first + sheetCapacity);
         const canvas = document.createElement("canvas");
-        canvas.width = frameW * sheetBatch.length; canvas.height = frameH;
+        canvas.width = frameW * sheetCapacity; canvas.height = frameH;
         if (canvas.width > 4096 || canvas.height > 4096) throw new Error("La tira horizontal excede 4096 × 4096 px; reduce el ancho del fotograma.");
         const ctx = canvas.getContext("2d", { alpha: true });
         if (!ctx) throw new Error("No se pudo crear la tira de fotogramas.");
@@ -287,7 +287,7 @@
         zip.file(filename, blob, { compression: "STORE" });
         sheetMeta.push({ filename, width: canvas.width, height: canvas.height, frameCount: sheetBatch.length, columns: 4, rows: 1 });
         canvas.width = 1; canvas.height = 1;
-        log("Tira " + (sheetIndex + 1) + "/" + sheetCount + " lista (" + sheetBatch.length + " fotogramas).");
+        log("Tira " + (sheetIndex + 1) + "/" + sheetCount + " lista (" + sheetBatch.length + " fotogramas útiles; hoja normalizada a cuatro posiciones).");
       }
       if (!totalFrames) throw new Error("FFmpeg no generó fotogramas. Prueba con otro vídeo MP4 o revisa su códec.");
       setProgress(82, "Tiras de animación preparadas…");
