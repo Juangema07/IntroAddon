@@ -348,20 +348,11 @@
         ]
       }, null, 2));
 
-      // El título permanece estable; el subtítulo solo transporta la hoja y el índice del fotograma.
-      // "P" mantiene una cubierta negra mientras Bedrock prepara la primera textura.
+      // El título permanece estable; el subtítulo transporta la hoja y el índice.
+      // No se añade ninguna imagen de fondo ni cubierta para no tapar la animación.
       const introControls = [];
-      introControls.push({ black_background: { type: "image", texture: "textures/ui/intro/black", size: ["100%", "100%"], keep_ratio: false, anchor_from: "center", anchor_to: "center", layer: 1000001 } });
-      introControls.push({ preload_cover: {
-        type: "image", texture: "textures/ui/intro/black", size: ["100%", "100%"],
-        keep_ratio: false, anchor_from: "center", anchor_to: "center", layer: 1000004,
-        bindings: [
-          { binding_name: "#hud_subtitle_text_string" },
-          { binding_type: "view", source_property_name: "(not ((#hud_subtitle_text_string - 'P') = #hud_subtitle_text_string))", target_property_name: "#visible" }
-        ]
-      }});
       const frameTokens = Array.from({ length: capacity }, (_, i) => "'F" + i + "'").join(" - ");
-      const textureExpression = "('textures/ui/intro/spritesheet_' + (#hud_subtitle_text_string - " + frameTokens + " - 'P'))";
+      const textureExpression = "('textures/ui/intro/spritesheet_' + (#hud_subtitle_text_string - " + frameTokens + "))";
       for (let frame = 0; frame < capacity; frame++) {
         const uvX = (frame % cols) * frameW;
         const uvY = Math.floor(frame / cols) * frameH;
@@ -452,7 +443,7 @@ function startIntro(player) {
   const cfg = getCfg();
   // Un solo título evita reiniciar la animación del HUD en cada fotograma.
   // El primer fotograma se selecciona desde el subtítulo y queda cubierto mientras carga.
-  const opts = { fadeInDuration: 0, stayDuration: Math.max(1200, TOTAL_TICKS + 100), fadeOutDuration: 0, subtitle: "001F0P" };
+  const opts = { fadeInDuration: 0, stayDuration: Math.max(1200, TOTAL_TICKS + 100), fadeOutDuration: 0, subtitle: "001F0" };
   try { player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, HIDDEN); } catch (e) {}
   try { player.onScreenDisplay.setTitle("IA", opts); } catch (e) {}
   const startTick = system.currentTick + 30;
