@@ -10,7 +10,7 @@
   <meta http-equiv="Expires" content="0">
   <title>IntroAddon Studio</title>
   <link rel="stylesheet" href="styles.css?v=20261012m">
-  <script src="app-build-20261012l.js?v=20261107h" defer></script>
+  <script src="app-build-20261012l.js?v=20261107i" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -32,7 +32,7 @@
           <span class="upload-icon">↑</span>
           <strong>Selecciona o arrastra un vídeo</strong>
           <span>MP4, WebM, MOV y otros formatos admitidos por FFmpeg</span>
-          <input id="videoFile" type="file" accept="video/*,.mkv,.avi" onchange="var f=this.files&&this.files[0];var s=document.getElementById('status');if(f&&s){s.textContent='Archivo seleccionado: '+f.name+' ('+f.size+' bytes).';s.className='status';}if(f&&typeof window.introAddonSelectFile==='function'){window.introAddonSelectFile(f);}">
+          <input id="videoFile" type="file" accept="video/*,.mkv,.avi">
         </label>
         <div id="videoInfo" class="file-info hidden"></div>
         <video id="preview" class="preview hidden" controls playsinline></video>
