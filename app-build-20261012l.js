@@ -113,6 +113,7 @@
       " (" + (cols * rows) + " fotogramas por hoja).";
   }
   window.introAddonSelectFile = acceptFile;
+  $("videoFile").addEventListener("change", event => acceptFile(event.target.files && event.target.files[0]));
   $("videoFile").addEventListener("cancel", () => setStatus("Selección cancelada. Pulsa el selector para elegir un vídeo.", ""));
   const drop = $("dropzone");
   ["dragenter", "dragover"].forEach(type => drop.addEventListener(type, e => { e.preventDefault(); drop.classList.add("dragging"); }));
@@ -367,7 +368,8 @@
           ]
         }});
       }
-      // Sin imagen superpuesta: los fotogramas se dibujan directamente sobre el HUD.\n      for (let i = 0; i < sheetMeta.length; i++) {
+      // Sin imagen superpuesta: los fotogramas se dibujan directamente sobre el HUD.
+      for (let i = 0; i < sheetMeta.length; i++) {
         const sheet = sheetMeta[i];
         const pngBytes = await zip.file(sheet.filename).async("uint8array");
         rpZip.file("textures/ui/intro/spritesheet_" + String(i + 1).padStart(3, "0") + ".png", pngBytes, { binary: true, compression: "STORE" });
