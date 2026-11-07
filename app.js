@@ -88,8 +88,8 @@
     const maxCols = Math.max(1, Math.floor(4096 / w));
     const maxRows = Math.max(1, Math.floor(4096 / h));
     const targetFrames = Math.max(1, Math.ceil(fps * Math.min(duration || 2, 2)));
-    const cols = Math.min(maxCols, Math.max(1, Math.ceil(Math.sqrt(targetFrames * h / w))));
-    const rows = Math.min(maxRows, Math.max(1, Math.ceil(targetFrames / cols)));
+    const cols = 4;
+    const rows = 1;
     $("columns").value = String(cols); $("rows").value = String(rows);
     $("autoConfig").textContent = "Origen: " + state.sourceWidth + "×" + state.sourceHeight + " · " +
       (duration ? duration.toFixed(2) + " s" : "duración por detectar") + " · Recomendado: " +
@@ -175,13 +175,10 @@
       const fps = readNumber("fps", 1, 60);
       const frameW = readNumber("frameWidth", 16, 4096);
       const frameH = readNumber("frameHeight", 16, 4096);
-      const requestedCols = readNumber("columns", 1, 32);
-      const requestedRows = readNumber("rows", 1, 32);
-      // El atlas final será una sola imagen en cuadrícula, reproducida mediante metadatos Aseprite.
-      let cols = Math.max(1, Math.min(requestedCols, Math.floor(4096 / frameW), 32));
-      let rows = 1;
-      let capacity = 1;
-      if (frameW > 4096 || frameH > 4096) throw new Error("Cada fotograma debe caber en 4096 × 4096 px.");
+      const cols = 4;
+      const rows = 1;
+      const capacity = 4;
+      if (frameW > 1024 || frameH > 4096) throw new Error("Con cuatro fotogramas por hoja, el ancho máximo por fotograma es 1024 px.");
       if (frameW * frameH > 180000000) throw new Error("La resolución del fotograma es demasiado grande. Reduce ancho y alto.");
       setStatus("Preparando bibliotecas de generación…");
       if (typeof window.JSZip !== "function") {
@@ -256,16 +253,14 @@
       if (!batch.length) throw new Error("FFmpeg terminó sin generar fotogramas. Prueba con otro vídeo MP4 o revisa su códec.");
       const maxCols = Math.floor(4096 / frameW);
       const maxRows = Math.floor(4096 / frameH);
-      if (maxCols < 1 || maxRows < 1) throw new Error("Cada fotograma debe caber en 4096 × 4096 px.");
-      // Enfoque nativo de Bedrock: tiras horizontales con flip_book, sin parser Aseprite.
-      cols = Math.min(maxCols, Math.max(1, requestedCols));
-      rows = 1;
-      capacity = cols;
-      const sheetCount = Math.ceil(batch.length / capacity);
+      if (maxCols < 4 || maxRows < 1) throw new Error("Se necesitan cuatro fotogramas horizontales dentro del límite de 4096 px. Reduce el ancho por fotograma.");
+      // Formato idéntico al addon funcional: cuatro fotogramas por spritesheet.
+      const sheetCapacity = 4;
+      const sheetCount = Math.ceil(batch.length / sheetCapacity);
       log("Extracción completada: " + batch.length + " fotogramas. Se crearán " + sheetCount + " tiras horizontales para flip_book.");
       for (let sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++) {
-        const first = sheetIndex * capacity;
-        const sheetBatch = batch.slice(first, first + capacity);
+        const first = sheetIndex * sheetCapacity;
+        const sheetBatch = batch.slice(first, first + sheetCapacity);
         const canvas = document.createElement("canvas");
         canvas.width = frameW * sheetBatch.length; canvas.height = frameH;
         if (canvas.width > 4096 || canvas.height > 4096) throw new Error("La tira horizontal excede 4096 × 4096 px; reduce el ancho del fotograma.");
@@ -290,7 +285,7 @@
         const blob = await new Promise((resolve, reject) => canvas.toBlob(v => v ? resolve(v) : reject(new Error("No se pudo codificar la tira PNG.")), "image/png"));
         const filename = "video/spritesheet_" + String(sheetIndex + 1).padStart(3, "0") + ".png";
         zip.file(filename, blob, { compression: "STORE" });
-        sheetMeta.push({ filename, width: canvas.width, height: canvas.height, frameCount: sheetBatch.length, columns: sheetBatch.length, rows: 1 });
+        sheetMeta.push({ filename, width: canvas.width, height: canvas.height, frameCount: sheetBatch.length, columns: 4, rows: 1 });
         canvas.width = 1; canvas.height = 1;
         log("Tira " + (sheetIndex + 1) + "/" + sheetCount + " lista (" + sheetBatch.length + " fotogramas).");
       }
