@@ -47,17 +47,17 @@
           <label>Formato de imagen
             <select id="imageFormat"><option value="png" selected>PNG (Bedrock)</option></select>
           </label>
-          <label>Ancho por fotograma (automático)
-            <input id="frameWidth" type="number" min="16" max="4096" step="16" value="640">
+          <label>Ancho por fotograma (máximo 1024 px)
+            <input id="frameWidth" type="number" min="16" max="1024" step="16" value="640">
           </label>
           <label>Alto por fotograma (automático)
             <input id="frameHeight" type="number" min="16" max="4096" step="16" value="360">
           </label>
-          <label>Columnas por hoja (automático)
-            <input id="columns" type="number" min="1" max="32" value="4">
+          <label>Fotogramas por hoja (fijo)
+            <input id="columns" type="number" min="4" max="4" value="4" readonly>
           </label>
-          <label>Filas por hoja (automático)
-            <input id="rows" type="number" min="1" max="32" value="4">
+          <label>Filas por hoja (fijo)
+            <input id="rows" type="number" min="1" max="1" value="1" readonly>
           </label>
         </div>
         <p class="hint">Cada hoja tendrá como máximo columnas × filas fotogramas. Si la secuencia es más larga, se crearán hojas adicionales.</p>
