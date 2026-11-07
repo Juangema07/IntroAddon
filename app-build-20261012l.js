@@ -262,7 +262,7 @@
         const first = sheetIndex * sheetCapacity;
         const sheetBatch = batch.slice(first, first + sheetCapacity);
         const canvas = document.createElement("canvas");
-        canvas.width = frameW * sheetCapacity; canvas.height = frameH;
+        canvas.width = frameW * sheetBatch.length; canvas.height = frameH;
         if (canvas.width > 4096 || canvas.height > 4096) throw new Error("La tira horizontal excede 4096 × 4096 px; reduce el ancho del fotograma.");
         const ctx = canvas.getContext("2d", { alpha: true });
         if (!ctx) throw new Error("No se pudo crear la tira de fotogramas.");
