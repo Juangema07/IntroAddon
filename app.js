@@ -85,15 +85,16 @@
     const round16 = n => Math.max(16, Math.min(1024, Math.round((n * scale) / 16) * 16));
     const w = round16(state.sourceWidth), h = round16(state.sourceHeight);
     $("frameWidth").value = String(w); $("frameHeight").value = String(h);
-    const maxCols = Math.max(1, Math.floor(4096 / w));
-    const maxRows = Math.max(1, Math.floor(4096 / h));
-    const targetFrames = Math.max(1, Math.ceil(fps * Math.min(duration || 2, 2)));
-    const cols = 4;
-    const rows = 1;
+    const maxCols = Math.min(16, Math.max(1, Math.floor(4096 / w)));
+    const maxRows = Math.min(16, Math.max(1, Math.floor(4096 / h)));
+    const cols = Math.max(1, Math.min(4, maxCols));
+    const rows = Math.max(1, Math.min(4, maxRows, Math.floor(64 / cols)));
     $("columns").value = String(cols); $("rows").value = String(rows);
+    $("columns").max = String(maxCols); $("rows").max = String(maxRows);
     $("autoConfig").textContent = "Origen: " + state.sourceWidth + "×" + state.sourceHeight + " · " +
       (duration ? duration.toFixed(2) + " s" : "duración por detectar") + " · Recomendado: " +
-      w + "×" + h + " px, " + fps + " FPS, hojas de " + cols + "×" + rows + " fotogramas.";
+      w + "×" + h + " px, " + fps + " FPS, hoja " + cols + "×" + rows +
+      " (" + (cols * rows) + " fotogramas por hoja).";
   }
   window.introAddonSelectFile = acceptFile;
   $("videoFile").addEventListener("cancel", () => setStatus("Selección cancelada. Pulsa el selector para elegir un vídeo.", ""));
@@ -166,19 +167,21 @@
     state.busy = true;
     $("generate").disabled = true;
     $("log").textContent = "";
-    log("Versión de procesamiento: IntroAddon V2 · cuatro fotogramas por hoja + audio OGG · build 2026-10-13-b");
+    log("Versión de procesamiento: IntroAddon V2 · cuadrícula editable de fotogramas + audio OGG · build 2026-11-07-a");
     $("progressWrap").classList.remove("hidden");
     $("downloadAgain").classList.add("hidden");
     let ff;
     const tempFiles = [];
     try {
       const fps = readNumber("fps", 1, 60);
-      const frameW = readNumber("frameWidth", 16, 4096);
+      const frameW = readNumber("frameWidth", 16, 1024);
       const frameH = readNumber("frameHeight", 16, 4096);
-      const cols = 4;
-      const rows = 1;
-      const capacity = 4;
-      if (frameW > 1024 || frameH > 4096) throw new Error("Con cuatro fotogramas por hoja, el ancho máximo por fotograma es 1024 px.");
+      const cols = readNumber("columns", 1, 16);
+      const rows = readNumber("rows", 1, 16);
+      const capacity = cols * rows;
+      if (capacity > 64) throw new Error("La cuadrícula puede contener como máximo 64 fotogramas por hoja. Reduce las columnas o las filas.");
+      if (frameW * cols > 4096) throw new Error("El ancho total de la hoja supera 4096 px. Reduce las columnas o el ancho por fotograma.");
+      if (frameH * rows > 4096) throw new Error("El alto total de la hoja supera 4096 px. Reduce las filas o el alto por fotograma.");
       if (frameW * frameH > 180000000) throw new Error("La resolución del fotograma es demasiado grande. Reduce ancho y alto.");
       setStatus("Preparando bibliotecas de generación…");
       if (typeof window.JSZip !== "function") {
@@ -253,25 +256,27 @@
       if (!batch.length) throw new Error("FFmpeg terminó sin generar fotogramas. Prueba con otro vídeo MP4 o revisa su códec.");
       const maxCols = Math.floor(4096 / frameW);
       const maxRows = Math.floor(4096 / frameH);
-      if (maxCols < 4 || maxRows < 1) throw new Error("Se necesitan cuatro fotogramas horizontales dentro del límite de 4096 px. Reduce el ancho por fotograma.");
-      // Formato idéntico al addon funcional: cuatro fotogramas por spritesheet.
-      const sheetCapacity = 4;
+      if (cols > maxCols || rows > maxRows) throw new Error("La cuadrícula " + cols + "×" + rows + " no cabe en el límite de 4096 × 4096 px. Reduce filas, columnas o resolución.");
+      // Método V2: spritesheets en cuadrícula; cada celda sigue siendo un fotograma independiente.
+      const sheetCapacity = capacity;
       const sheetCount = Math.ceil(batch.length / sheetCapacity);
-      log("Extracción completada: " + batch.length + " fotogramas. Se crearán " + sheetCount + " spritesheets V2 de cuatro fotogramas.");
+      log("Extracción completada: " + batch.length + " fotogramas. Se crearán " + sheetCount + " spritesheets de " + cols + "×" + rows + " fotogramas.");
       for (let sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++) {
         const first = sheetIndex * sheetCapacity;
         const sheetBatch = batch.slice(first, first + sheetCapacity);
         const canvas = document.createElement("canvas");
-        canvas.width = frameW * sheetBatch.length; canvas.height = frameH;
-        if (canvas.width > 4096 || canvas.height > 4096) throw new Error("La tira horizontal excede 4096 × 4096 px; reduce el ancho del fotograma.");
+        canvas.width = frameW * cols; canvas.height = frameH * rows;
+        if (canvas.width > 4096 || canvas.height > 4096) throw new Error("La cuadrícula de fotogramas excede 4096 × 4096 px.");
         const ctx = canvas.getContext("2d", { alpha: true });
-        if (!ctx) throw new Error("No se pudo crear la tira de fotogramas.");
+        if (!ctx) throw new Error("No se pudo crear la hoja de fotogramas.");
         for (let localIndex = 0; localIndex < sheetBatch.length; localIndex++) {
           const name = sheetBatch[localIndex], globalIndex = first + localIndex;
           let img;
           try {
             img = await createImageBitmap(new Blob([ff.FS("readFile", name)], { type: "image/jpeg" }));
-            ctx.drawImage(img, localIndex * frameW, 0, frameW, frameH);
+            const x = (localIndex % cols) * frameW;
+            const y = Math.floor(localIndex / cols) * frameH;
+            ctx.drawImage(img, x, y, frameW, frameH);
           } finally {
             if (img && img.close) img.close();
             try { ff.FS("unlink", name); } catch (_) {}
@@ -285,9 +290,9 @@
         const blob = await new Promise((resolve, reject) => canvas.toBlob(v => v ? resolve(v) : reject(new Error("No se pudo codificar la tira PNG.")), "image/png"));
         const filename = "video/spritesheet_" + String(sheetIndex + 1).padStart(3, "0") + ".png";
         zip.file(filename, blob, { compression: "STORE" });
-        sheetMeta.push({ filename, width: canvas.width, height: canvas.height, frameCount: sheetBatch.length, columns: 4, rows: 1 });
+        sheetMeta.push({ filename, width: canvas.width, height: canvas.height, frameCount: sheetBatch.length, columns: cols, rows: rows });
         canvas.width = 1; canvas.height = 1;
-        log("Tira " + (sheetIndex + 1) + "/" + sheetCount + " lista (" + sheetBatch.length + " fotogramas útiles; hoja normalizada a cuatro posiciones).");
+        log("Hoja " + (sheetIndex + 1) + "/" + sheetCount + " lista (" + sheetBatch.length + " fotogramas útiles en cuadrícula " + cols + "×" + rows + ").");
       }
       if (!totalFrames) throw new Error("FFmpeg no generó fotogramas. Prueba con otro vídeo MP4 o revisa su códec.");
       setProgress(82, "Tiras de animación preparadas…");
@@ -298,11 +303,11 @@
         createdAt: new Date().toISOString(),
         source: { name: state.file.name, durationSeconds: duration, fps, extractedFrames: totalFrames },
         playback: { targetPlatforms: ["Android", "Windows"], durationSeconds: duration, fps, audioPath: "audio/intro.ogg" },
-        spritesheets: { frameWidth: frameW, frameHeight: frameH, columns: 4, rows: 1, framesPerSheet: 4, format: "png", totalFrames, sheets: sheetMeta },
-        runtime: { addonFormat: "mcaddon", visualPlayback: "Bedrock JSON UI con cuatro recortes UV por spritesheet y títulos IA###F#", soundEvent: "introaddon:cinematic_intro" }
+        spritesheets: { frameWidth: frameW, frameHeight: frameH, columns: cols, rows: rows, framesPerSheet: capacity, format: "png", totalFrames, sheets: sheetMeta },
+        runtime: { addonFormat: "mcaddon", visualPlayback: "Bedrock JSON UI con recortes UV por celda y actualización de subtítulo IA/###F#", soundEvent: "introaddon:cinematic_intro" }
       };
       zip.file("introaddon_config.json", JSON.stringify(config, null, 2));
-      zip.file("README.txt", "IntroAddon V2 - recursos preparados\\n\\nActiva ambos packs. La animación usa títulos IA###F# y cuatro fotogramas por spritesheet.\\n");
+      zip.file("README.txt", "IntroAddon V2 - recursos preparados\\n\\nActiva ambos packs. La animación usa una cuadrícula editable de fotogramas por spritesheet.\\n");
 
       setProgress(86, "Construyendo los packs compatibles con IntroAddon V2…");
       const rpUuid = makeUuid(), rpModuleUuid = makeUuid(), bpUuid = makeUuid(), bpDataUuid = makeUuid(), bpScriptUuid = makeUuid();
@@ -327,19 +332,32 @@
         ]
       }, null, 2));
 
-      // La UI de la versión funcional identifica la hoja y el fotograma desde el título del HUD.
+      // El título permanece estable; el subtítulo solo transporta la hoja y el índice del fotograma.
+      // "P" mantiene una cubierta negra mientras Bedrock prepara la primera textura.
       const introControls = [];
       introControls.push({ black_background: { type: "image", texture: "textures/ui/intro/black", size: ["100%", "100%"], keep_ratio: false, anchor_from: "center", anchor_to: "center", layer: 1000001 } });
-      for (let frame = 0; frame < 4; frame++) {
+      introControls.push({ preload_cover: {
+        type: "image", texture: "textures/ui/intro/black", size: ["100%", "100%"],
+        keep_ratio: false, anchor_from: "center", anchor_to: "center", layer: 1000004,
+        bindings: [
+          { binding_name: "#hud_subtitle_text_string" },
+          { binding_type: "view", source_property_name: "(not ((#hud_subtitle_text_string - 'P') = #hud_subtitle_text_string))", target_property_name: "#visible" }
+        ]
+      }});
+      const frameTokens = Array.from({ length: capacity }, (_, i) => "'F" + i + "'").join(" - ");
+      const textureExpression = "('textures/ui/intro/spritesheet_' + (#hud_subtitle_text_string - " + frameTokens + " - 'P'))";
+      for (let frame = 0; frame < capacity; frame++) {
+        const uvX = (frame % cols) * frameW;
+        const uvY = Math.floor(frame / cols) * frameH;
         introControls.push({ ["f" + frame]: {
           type: "image", size: ["100%", "100%"], keep_ratio: true,
           anchor_from: "center", anchor_to: "center",
-          texture: "#texture", uv: [frame * frameW, 0], uv_size: [frameW, frameH],
+          texture: "#texture", uv: [uvX, uvY], uv_size: [frameW, frameH],
           layer: 1000003, disable_anim_fast_forward: true,
           bindings: [
-            { binding_name: "#hud_title_text_string" },
-            { binding_type: "view", source_property_name: "('textures/ui/intro/spritesheet_' + (#hud_title_text_string - 'IA' - 'F0' - 'F1' - 'F2' - 'F3' - 'F9'))", target_property_name: "#texture" },
-            { binding_type: "view", source_property_name: "(not ((#hud_title_text_string - 'F" + frame + "') = #hud_title_text_string))", target_property_name: "#visible" }
+            { binding_name: "#hud_subtitle_text_string" },
+            { binding_type: "view", source_property_name: textureExpression, target_property_name: "#texture" },
+            { binding_type: "view", source_property_name: "(not ((#hud_subtitle_text_string - 'F" + frame + "') = #hud_subtitle_text_string))", target_property_name: "#visible" }
           ]
         }});
       }
@@ -388,7 +406,7 @@ import { ModalFormData } from "@minecraft/server-ui";
 const SOUND_ID = "introaddon:cinematic_intro";
 const FPS = __FPS__;
 const TOTAL_FRAMES = __TOTAL_FRAMES__;
-const FRAMES_PER_SHEET = 4;
+const FRAMES_PER_SHEET = __CAPACITY__;
 const TOTAL_TICKS = Math.ceil(TOTAL_FRAMES * 20 / FPS) + 10;
 const HIDDEN = [HudElement.TouchControls, HudElement.Hotbar, HudElement.Crosshair, HudElement.Health, HudElement.Hunger, HudElement.Armor, HudElement.ProgressBar, HudElement.AirBubbles, HudElement.HorseHealth, HudElement.StatusEffects, HudElement.ItemText, HudElement.PaperDoll, HudElement.ToolTips];
 
@@ -416,10 +434,12 @@ function startIntro(player) {
   if (playing.has(player.id)) return;
   playing.add(player.id);
   const cfg = getCfg();
-  const opts = { fadeInDuration: 0, stayDuration: 30, fadeOutDuration: 0 };
+  // Un solo título evita reiniciar la animación del HUD en cada fotograma.
+  // El primer fotograma se selecciona desde el subtítulo y queda cubierto mientras carga.
+  const opts = { fadeInDuration: 0, stayDuration: Math.max(1200, TOTAL_TICKS + 100), fadeOutDuration: 0, subtitle: "001F0P" };
   try { player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, HIDDEN); } catch (e) {}
-  try { player.onScreenDisplay.setTitle("IA000F9", opts); } catch (e) {}
-  const startTick = system.currentTick + 10;
+  try { player.onScreenDisplay.setTitle("IA", opts); } catch (e) {}
+  const startTick = system.currentTick + 30;
   let soundDone = false, last = -1;
   const id = system.runInterval(() => {
     let valid = true;
@@ -443,7 +463,7 @@ function startIntro(player) {
     last = frame;
     const sheet = Math.floor(frame / FRAMES_PER_SHEET) + 1;
     const k = frame % FRAMES_PER_SHEET;
-    try { player.onScreenDisplay.setTitle("IA" + pad3(sheet) + "F" + k, opts); } catch (e) {}
+    try { player.onScreenDisplay.updateSubtitle(pad3(sheet) + "F" + k); } catch (e) {}
   }, 1);
 }
 
@@ -510,7 +530,7 @@ system.afterEvents.scriptEventReceive.subscribe((ev) => {
   if (ev.id === "introaddon:menu") showMenu(p);
   else if (ev.id === "introaddon:play") startIntro(p);
 });
-`.replace("__FPS__", String(fps)).replace("__TOTAL_FRAMES__", String(totalFrames));
+`.replace("__FPS__", String(fps)).replace("__TOTAL_FRAMES__", String(totalFrames)).replace("__CAPACITY__", String(capacity));
       bpZip.file("scripts/main.js", scriptSource);
       bpZip.file("README.txt", "Activa BP y RP. /scriptevent introaddon:menu = ajustes; introaddon:play = repetir intro.\\n");
       bpZip.file("introaddon_config.json", JSON.stringify(config, null, 2));
