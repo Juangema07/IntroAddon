@@ -166,7 +166,7 @@
     state.busy = true;
     $("generate").disabled = true;
     $("log").textContent = "";
-    log("Versión de procesamiento: flip_book nativo en tiras horizontales + audio conservado · build 2026-10-13-b");
+    log("Versión de procesamiento: IntroAddon V2 · cuatro fotogramas por hoja + audio OGG · build 2026-10-13-b");
     $("progressWrap").classList.remove("hidden");
     $("downloadAgain").classList.add("hidden");
     let ff;
@@ -257,7 +257,7 @@
       // Formato idéntico al addon funcional: cuatro fotogramas por spritesheet.
       const sheetCapacity = 4;
       const sheetCount = Math.ceil(batch.length / sheetCapacity);
-      log("Extracción completada: " + batch.length + " fotogramas. Se crearán " + sheetCount + " tiras horizontales para flip_book.");
+      log("Extracción completada: " + batch.length + " fotogramas. Se crearán " + sheetCount + " spritesheets V2 de cuatro fotogramas.");
       for (let sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++) {
         const first = sheetIndex * sheetCapacity;
         const sheetBatch = batch.slice(first, first + sheetCapacity);
