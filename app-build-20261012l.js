@@ -183,7 +183,7 @@
     state.busy = true;
     $("generate").disabled = true;
     $("log").textContent = "";
-    log("Versión de procesamiento: IntroAddon V2 · cuadrícula editable de fotogramas + audio OGG · build 2026-11-07-a");
+    log("Versión de procesamiento: IntroAddon V2 · cuadrícula editable de fotogramas + audio OGG · build 2026-11-07-b");
     $("progressWrap").classList.remove("hidden");
     $("downloadAgain").classList.add("hidden");
     let ff;
@@ -348,11 +348,10 @@
         ]
       }, null, 2));
 
-      // El título permanece estable; el subtítulo transporta la hoja y el índice.
-      // No se añade ninguna imagen de fondo ni cubierta para no tapar la animación.
+      // El título del HUD transporta hoja y fotograma, igual que en el pack de referencia funcional.
       const introControls = [];
       const frameTokens = Array.from({ length: capacity }, (_, i) => "'F" + i + "'").join(" - ");
-      const textureExpression = "('textures/ui/intro/spritesheet_' + (#hud_subtitle_text_string - " + frameTokens + "))";
+      const textureExpression = "('textures/ui/intro/spritesheet_' + (#hud_title_text_string - 'IA' - " + frameTokens + "))";
       for (let frame = 0; frame < capacity; frame++) {
         const uvX = (frame % cols) * frameW;
         const uvY = Math.floor(frame / cols) * frameH;
@@ -362,25 +361,13 @@
           texture: "#texture", uv: [uvX, uvY], uv_size: [frameW, frameH],
           layer: 1000003, disable_anim_fast_forward: true,
           bindings: [
-            { binding_name: "#hud_subtitle_text_string" },
+            { binding_name: "#hud_title_text_string" },
             { binding_type: "view", source_property_name: textureExpression, target_property_name: "#texture" },
-            { binding_type: "view", source_property_name: "(not ((#hud_subtitle_text_string - 'F" + frame + "') = #hud_subtitle_text_string))", target_property_name: "#visible" }
+            { binding_type: "view", source_property_name: "(not ((#hud_title_text_string - 'F" + frame + "') = #hud_title_text_string))", target_property_name: "#visible" }
           ]
         }});
       }
-      // Fondo negro de respaldo: queda detrás de los fotogramas y no los tapa.
-      introControls.unshift({ black_background: {
-        type: "image", size: ["100%", "100%"], anchor_from: "center", anchor_to: "center",
-        texture: "textures/ui/intro/black", layer: 1000001
-      }});
-      rpZip.file("textures/ui/intro/black.png", await new Promise((resolve, reject) => {
-        const c = document.createElement("canvas"); c.width = 1; c.height = 1;
-        const cx = c.getContext("2d", { alpha: false });
-        if (!cx) return reject(new Error("No se pudo crear el fondo negro."));
-        cx.fillStyle = "#000000"; cx.fillRect(0, 0, 1, 1);
-        c.toBlob(blob => blob ? resolve(blob) : reject(new Error("No se pudo codificar el fondo negro.")), "image/png");
-      }), { compression: "STORE" });
-      for (let i = 0; i < sheetMeta.length; i++) {
+      // Sin imagen superpuesta: los fotogramas se dibujan directamente sobre el HUD.\n      for (let i = 0; i < sheetMeta.length; i++) {
         const sheet = sheetMeta[i];
         const pngBytes = await zip.file(sheet.filename).async("uint8array");
         rpZip.file("textures/ui/intro/spritesheet_" + String(i + 1).padStart(3, "0") + ".png", pngBytes, { binary: true, compression: "STORE" });
@@ -446,11 +433,10 @@ function startIntro(player) {
   if (playing.has(player.id)) return;
   playing.add(player.id);
   const cfg = getCfg();
-  // Un solo título evita reiniciar la animación del HUD en cada fotograma.
-  // El primer fotograma se selecciona desde el subtítulo y queda cubierto mientras carga.
-  const opts = { fadeInDuration: 0, stayDuration: Math.max(1200, TOTAL_TICKS + 100), fadeOutDuration: 0, subtitle: "001F0" };
+  // El título lleva el identificador de hoja y celda que consume la UI de Bedrock.
+  const opts = { fadeInDuration: 0, stayDuration: Math.max(1200, TOTAL_TICKS + 100), fadeOutDuration: 0 };
   try { player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, HIDDEN); } catch (e) {}
-  try { player.onScreenDisplay.setTitle("IA", opts); } catch (e) {}
+  try { player.onScreenDisplay.setTitle("IA001F0", opts); } catch (e) {}
   const startTick = system.currentTick + 30;
   let soundDone = false, last = -1;
   const id = system.runInterval(() => {
@@ -475,7 +461,7 @@ function startIntro(player) {
     last = frame;
     const sheet = Math.floor(frame / FRAMES_PER_SHEET) + 1;
     const k = frame % FRAMES_PER_SHEET;
-    try { player.onScreenDisplay.updateSubtitle(pad3(sheet) + "F" + k); } catch (e) {}
+    try { player.onScreenDisplay.setTitle("IA" + pad3(sheet) + "F" + k, opts); } catch (e) {}
   }, 1);
 }
 
