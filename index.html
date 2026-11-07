@@ -10,7 +10,7 @@
   <meta http-equiv="Expires" content="0">
   <title>IntroAddon Studio</title>
   <link rel="stylesheet" href="styles.css?v=20261012m">
-  <script src="app-build-20261012l.js?v=20261107c" defer></script>
+  <script src="app-build-20261012l.js?v=20261107d" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -53,14 +53,14 @@
           <label>Alto por fotograma (automático)
             <input id="frameHeight" type="number" min="16" max="4096" step="16" value="360">
           </label>
-          <label>Fotogramas por hoja (fijo)
-            <input id="columns" type="number" min="4" max="4" value="4" readonly>
+          <label>Columnas por hoja (editable)
+            <input id="columns" type="number" min="1" max="16" step="1" value="4">
           </label>
-          <label>Filas por hoja (fijo)
-            <input id="rows" type="number" min="1" max="1" value="1" readonly>
+          <label>Filas por hoja (editable)
+            <input id="rows" type="number" min="1" max="16" step="1" value="4">
           </label>
         </div>
-        <p class="hint">Cada hoja contiene cuatro fotogramas consecutivos. La web crea automáticamente tantas hojas como necesite el vídeo.</p>
+        <p class="hint">Puedes ajustar la cuadrícula. Cada hoja admite hasta 64 fotogramas y debe mantenerse dentro de 4096 × 4096 px.</p>
       </div>
 
       <div class="panel">
