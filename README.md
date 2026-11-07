@@ -39,7 +39,7 @@ El repositorio incluye `.github/workflows/pages.yml`.
 ## Límites conocidos de esta versión experimental
 
 - Minecraft no convierte el vídeo: la web prepara los recursos y el addon los consume.
-- El pack usa JSON UI `aseprite_flip_book` para animar los spritesheets. La modificación de `hud_screen` debe probarse en la versión exacta de Bedrock usada en Android y Windows.
+- El pack usa JSON UI compatible con IntroAddon V2: cada spritesheet contiene cuatro fotogramas horizontales y el script avanza mediante títulos `IA###F#`, cambiando la textura y el recorte UV. La modificación de `hud_screen` debe probarse en la versión exacta de Bedrock usada en Android y Windows.
 - El menú dentro del mundo aparece al primer jugador y permite elegir individual o grupal; el modo grupal pregunta el mínimo de jugadores. En esta versión, la selección controla el audio, pero la UI visual aún empieza cuando carga el HUD de cada cliente. Por tanto, la sincronización visual grupal no está resuelta y debe probarse antes de considerar la función terminada.
 - La política de repetición del script afecta al audio; la UI puede reiniciarse cuando el HUD se vuelva a cargar. Debe verificarse en juego antes de usarlo en un mundo principal.
 - El spritesheet está limitado a 4096 px por lado para reducir problemas de compatibilidad y memoria.
