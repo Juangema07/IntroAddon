@@ -76,6 +76,22 @@
     setStatus("Vídeo listo. Calculando la configuración recomendada…");
   }
 
+  function updateGridLimits() {
+    const w = Math.max(16, Number($("frameWidth").value) || 640);
+    const h = Math.max(16, Number($("frameHeight").value) || 360);
+    const maxCols = Math.min(16, Math.max(1, Math.floor(4096 / w)));
+    const selectedCols = Math.max(1, Math.min(maxCols, Math.floor(Number($("columns").value) || 4)));
+    const maxRows = Math.min(16, Math.max(1, Math.floor(4096 / h)), Math.floor(64 / selectedCols));
+    $("columns").max = String(maxCols);
+    $("columns").value = String(selectedCols);
+    $("rows").max = String(maxRows);
+    const selectedRows = Math.max(1, Math.min(maxRows, Math.floor(Number($("rows").value) || 4)));
+    $("rows").value = String(selectedRows);
+  }
+  $("frameWidth").addEventListener("input", updateGridLimits);
+  $("frameHeight").addEventListener("input", updateGridLimits);
+  $("columns").addEventListener("input", updateGridLimits);
+
   function autoConfigure() {
     if (!state.sourceWidth || !state.sourceHeight) return;
     const duration = state.duration || 0;
@@ -90,7 +106,7 @@
     const cols = Math.max(1, Math.min(4, maxCols));
     const rows = Math.max(1, Math.min(4, maxRows, Math.floor(64 / cols)));
     $("columns").value = String(cols); $("rows").value = String(rows);
-    $("columns").max = String(maxCols); $("rows").max = String(maxRows);
+    updateGridLimits();
     $("autoConfig").textContent = "Origen: " + state.sourceWidth + "×" + state.sourceHeight + " · " +
       (duration ? duration.toFixed(2) + " s" : "duración por detectar") + " · Recomendado: " +
       w + "×" + h + " px, " + fps + " FPS, hoja " + cols + "×" + rows +
