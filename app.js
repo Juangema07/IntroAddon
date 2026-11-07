@@ -82,7 +82,7 @@
     const fps = duration > 180 ? 12 : duration > 60 ? 15 : 24;
     $("fps").value = String(fps);
     const scale = Math.min(1, 640 / state.sourceWidth, 360 / state.sourceHeight);
-    const round16 = n => Math.max(16, Math.round((n * scale) / 16) * 16);
+    const round16 = n => Math.max(16, Math.min(1024, Math.round((n * scale) / 16) * 16));
     const w = round16(state.sourceWidth), h = round16(state.sourceHeight);
     $("frameWidth").value = String(w); $("frameHeight").value = String(h);
     const maxCols = Math.max(1, Math.floor(4096 / w));
@@ -298,197 +298,227 @@
       setProgress(82, "Tiras de animación preparadas…");
 
       const config = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         project: "IntroAddon",
         createdAt: new Date().toISOString(),
-        source: { name: state.file.name, durationSeconds: duration, fps: fps, extractedFrames: totalFrames },
-        playback: {
-          targetPlatforms: ["Android", "Windows"],
-          durationSeconds: duration,
-          fps: fps,
-          audioPath: actualAudio.endsWith(".ogg") ? "audio/intro.ogg" : "audio/intro.wav"
-        },
-        spritesheets: {
-          frameWidth: frameW, frameHeight: frameH, columns: cols, rows: rows,
-          framesPerSheet: capacity, format: imageFormat, totalFrames: totalFrames, sheets: sheetMeta
-        },
-        note: "Todos los fotogramas se empaquetan en una única imagen atlas PNG con metadatos Aseprite para aseprite_flip_book; el audio OGG Vorbis se conserva en el Resource Pack."
-      };
-      config.runtime = {
-        addonFormat: "mcaddon",
-        visualPlayback: "Bedrock JSON UI flip_book con tiras horizontales enlazadas por eventos",
-        soundEvent: "introaddon:cinematic_intro",
-        limitations: [
-          "La UI visual comienza cuando carga el HUD de cada cliente.",
-          "El modo grupal espera para iniciar el audio, pero no sincroniza de forma fiable el comienzo visual entre clientes.",
-          "La integración de UI personalizada debe probarse en las versiones objetivo de Bedrock."
-        ]
+        source: { name: state.file.name, durationSeconds: duration, fps, extractedFrames: totalFrames },
+        playback: { targetPlatforms: ["Android", "Windows"], durationSeconds: duration, fps, audioPath: "audio/intro.ogg" },
+        spritesheets: { frameWidth: frameW, frameHeight: frameH, columns: 4, rows: 1, framesPerSheet: 4, format: "png", totalFrames, sheets: sheetMeta },
+        runtime: { addonFormat: "mcaddon", visualPlayback: "Bedrock JSON UI con cuatro recortes UV por spritesheet y títulos IA###F#", soundEvent: "introaddon:cinematic_intro" }
       };
       zip.file("introaddon_config.json", JSON.stringify(config, null, 2));
-      zip.file("README.txt", "IntroAddon - recursos preparados\\n\\nvideo/: spritesheets.\\naudio/: audio extraído.\\nintroaddon_config.json: rutas, FPS, dimensiones y opciones.\\n");
-      if ($("includeOriginal").checked) zip.file("source/" + safeName(state.file.name), state.file, { compression: "STORE" });
+      zip.file("README.txt", "IntroAddon V2 - recursos preparados\\n\\nActiva ambos packs. La animación usa títulos IA###F# y cuatro fotogramas por spritesheet.\\n");
 
-      setProgress(86, "Construyendo los packs de Minecraft Bedrock…");
+      setProgress(86, "Construyendo los packs compatibles con IntroAddon V2…");
       const rpUuid = makeUuid(), rpModuleUuid = makeUuid(), bpUuid = makeUuid(), bpDataUuid = makeUuid(), bpScriptUuid = makeUuid();
       const rpZip = new JSZip(), bpZip = new JSZip();
+      const version = [1, 0, 1];
       rpZip.file("manifest.json", JSON.stringify({
         format_version: 2,
-        header: { name: "IntroAddon Resources", description: "Recursos cinematográficos generados por IntroAddon Studio.", uuid: rpUuid, version: [1,0,0], min_engine_version: [1,26,50] },
-        modules: [{ type: "resources", uuid: rpModuleUuid, version: [1,0,0] }]
+        header: { name: "IntroAddon Resources", description: "Recursos cinematográficos generados por IntroAddon Studio.", uuid: rpUuid, version, min_engine_version: [1, 26, 50] },
+        modules: [{ type: "resources", uuid: rpModuleUuid, version }]
       }, null, 2));
       bpZip.file("manifest.json", JSON.stringify({
         format_version: 2,
-        header: { name: "IntroAddon Behavior", description: "Audio y configuración de IntroAddon.", uuid: bpUuid, version: [1,0,0], min_engine_version: [1,26,50] },
+        header: { name: "IntroAddon Behavior", description: "Audio y configuración de IntroAddon.", uuid: bpUuid, version, min_engine_version: [1, 26, 50] },
         modules: [
-          { type: "data", uuid: bpDataUuid, version: [1,0,0] },
-          { type: "script", language: "javascript", entry: "scripts/main.js", uuid: bpScriptUuid, version: [1,0,0] }
+          { type: "data", uuid: bpDataUuid, version },
+          { type: "script", language: "javascript", entry: "scripts/main.js", uuid: bpScriptUuid, version }
         ],
         dependencies: [
-          { uuid: rpUuid, version: [1,0,0] },
+          { uuid: rpUuid, version },
           { module_name: "@minecraft/server", version: "2.10.0" },
           { module_name: "@minecraft/server-ui", version: "2.1.0" }
         ]
       }, null, 2));
 
-      const uiAnimations = {};
-      const uiControls = [];
-      for (let i = 0; i < sheetMeta.length; i++) {
-        const sheet = sheetMeta[i], n = i + 1;
-        const texName = "spritesheet_" + String(n).padStart(3, "0");
-        const animName = "sheet_" + n + "_uv";
-        const startEvent = "introaddon_start_sheet_" + n;
-        const nextEvent = i < sheetMeta.length - 1 ? "introaddon_start_sheet_" + (n + 1) : "introaddon_finish";
-        const pngBytes = await zip.file(sheet.filename).async("uint8array");
-        rpZip.file("textures/ui/intro/" + texName + ".png", pngBytes, { binary: true, compression: "STORE" });
-        uiAnimations[animName] = {
-          anim_type: "flip_book",
-          initial_uv: [0, 0],
-          frame_count: sheet.frameCount,
-          frame_step: frameW,
-          fps: fps,
-          reversible: false,
-          resettable: false,
-          easing: "linear",
-          end_event: nextEvent
-        };
-        const control = {
-          type: "image",
-          texture: "textures/ui/intro/" + texName,
-          size: ["100%", "100%"], uv_size: [frameW, frameH],
-          uv: "@introaddon." + animName,
+      // La UI de la versión funcional identifica la hoja y el fotograma desde el título del HUD.
+      const introControls = [];
+      introControls.push({ black_background: { type: "image", texture: "textures/ui/intro/black", size: ["100%", "100%"], keep_ratio: false, anchor_from: "center", anchor_to: "center", layer: 1000001 } });
+      for (let frame = 0; frame < 4; frame++) {
+        introControls.push({ ["f" + frame]: {
+          type: "image", size: ["100%", "100%"], keep_ratio: true,
           anchor_from: "center", anchor_to: "center",
-          keep_ratio: true, layer: 1000002 + n, disable_anim_fast_forward: true
-        };
-        if (i > 0) {
-          const alphaName = "sheet_" + n + "_alpha";
-          if (i === sheetMeta.length - 1) {
-            const holdName = "sheet_" + n + "_hold";
-            const fadeName = "sheet_" + n + "_fade";
-            uiAnimations[alphaName] = { anim_type: "alpha", from: 0, to: 1, duration: 0.01, play_event: startEvent, next: "@introaddon." + holdName };
-            uiAnimations[holdName] = { anim_type: "alpha", from: 1, to: 1, duration: sheet.frameCount / fps, next: "@introaddon." + fadeName };
-            uiAnimations[fadeName] = { anim_type: "alpha", from: 1, to: 0, duration: 0.45 };
-          } else {
-            uiAnimations[alphaName] = { anim_type: "alpha", from: 0, to: 1, duration: 0.01, play_event: startEvent };
-          }
-          control.alpha = "@introaddon." + alphaName;
-        } else if (sheetMeta.length === 1) {
-          const alphaName = "sheet_1_alpha", holdName = "sheet_1_hold", fadeName = "sheet_1_fade";
-          uiAnimations[alphaName] = { anim_type: "alpha", from: 1, to: 1, duration: sheet.frameCount / fps, next: "@introaddon." + holdName };
-          uiAnimations[holdName] = { anim_type: "alpha", from: 1, to: 1, duration: 0.01, next: "@introaddon." + fadeName };
-          uiAnimations[fadeName] = { anim_type: "alpha", from: 1, to: 0, duration: 0.45 };
-          control.alpha = "@introaddon." + alphaName;
-        }
-        uiControls.push({ ["sheet_" + n]: control });
-      }
-      // Fondo negro opaco para cubrir el HUD y las franjas fuera de la imagen.
-      const blackCanvas = document.createElement("canvas");
-      blackCanvas.width = 1; blackCanvas.height = 1;
-      const blackContext = blackCanvas.getContext("2d", { alpha: false });
-      if (!blackContext) throw new Error("No se pudo crear el fondo negro de la intro.");
-      blackContext.fillStyle = "#000000"; blackContext.fillRect(0, 0, 1, 1);
-      const blackBlob = await new Promise(resolve => blackCanvas.toBlob(resolve, "image/png"));
-      if (!blackBlob) throw new Error("No se pudo codificar la textura del fondo negro.");
-      rpZip.file("textures/ui/intro/black.png", blackBlob, { binary: true, compression: "STORE" });
-      uiAnimations.black_fade = {
-        anim_type: "alpha", from: 1, to: 0, duration: 0.45,
-        play_event: "introaddon_finish"
-      };
-      uiControls.unshift({ black_background: {
-        type: "image", texture: "textures/ui/intro/black",
-        size: ["100%", "100%"], keep_ratio: false,
-        anchor_from: "center", anchor_to: "center",
-        alpha: "@introaddon.black_fade", layer: 1000001
-      } });
-      const introUi = {
-        namespace: "introaddon", ...uiAnimations,
-        overlay: {
-          type: "panel", size: ["100%", "100%"], layer: 1000000, controls: uiControls,
-          // La intro solo tapa el HUD cuando el script activa el título señal.
+          texture: "#texture", uv: [frame * frameW, 0], uv_size: [frameW, frameH],
+          layer: 1000003, disable_anim_fast_forward: true,
           bindings: [
             { binding_name: "#hud_title_text_string" },
-            { binding_type: "view", source_property_name: "(#hud_title_text_string = 'INTROADDON_START')", target_property_name: "#visible" }
+            { binding_type: "view", source_property_name: "('textures/ui/intro/spritesheet_' + (#hud_title_text_string - 'IA' - 'F0' - 'F1' - 'F2' - 'F3' - 'F9'))", target_property_name: "#texture" },
+            { binding_type: "view", source_property_name: "(not ((#hud_title_text_string - 'F" + frame + "') = #hud_title_text_string))", target_property_name: "#visible" }
           ]
-        }
-      };
-      rpZip.file("ui/intro_ui.json", JSON.stringify(introUi, null, 2));
+        }});
+      }
+      rpZip.file("textures/ui/intro/black.png", await new Promise((resolve, reject) => {
+        const c = document.createElement("canvas"); c.width = 1; c.height = 1;
+        const cx = c.getContext("2d", { alpha: false });
+        if (!cx) return reject(new Error("No se pudo crear el fondo negro."));
+        cx.fillStyle = "#000000"; cx.fillRect(0, 0, 1, 1);
+        c.toBlob(blob => blob ? resolve(blob) : reject(new Error("No se pudo codificar el fondo negro.")), "image/png");
+      }), { compression: "STORE" });
+      for (let i = 0; i < sheetMeta.length; i++) {
+        const sheet = sheetMeta[i];
+        const pngBytes = await zip.file(sheet.filename).async("uint8array");
+        rpZip.file("textures/ui/intro/spritesheet_" + String(i + 1).padStart(3, "0") + ".png", pngBytes, { binary: true, compression: "STORE" });
+      }
       rpZip.file("ui/_ui_defs.json", JSON.stringify({ ui_defs: ["ui/hud_screen.json", "ui/intro_ui.json"] }, null, 2));
       rpZip.file("ui/hud_screen.json", JSON.stringify({
         namespace: "hud",
-        root_panel: { modifications: [{
-          array_name: "controls", operation: "insert_front",
-          value: { "introaddon_overlay@introaddon.overlay": { layer: 1000000 } }
-        }] }
+        root_panel: { modifications: [{ array_name: "controls", operation: "insert_front", value: { "introaddon_overlay@introaddon.overlay": { layer: 1000000 } } }] }
       }, null, 2));
-      const audioPath = actualAudio.endsWith(".ogg") ? "sounds/intro.ogg" : "sounds/intro.wav";
-      rpZip.file(audioPath, audioData, { binary: true, compression: "STORE" });
+      rpZip.file("ui/intro_ui.json", JSON.stringify({
+        namespace: "introaddon",
+        overlay: {
+          type: "panel", size: ["100%", "100%"], layer: 1000000,
+          bindings: [
+            { binding_name: "#hud_title_text_string" },
+            { binding_type: "view", source_property_name: "(not ((#hud_title_text_string - 'IA') = #hud_title_text_string))", target_property_name: "#visible" }
+          ],
+          controls: introControls
+        }
+      }, null, 2));
+      rpZip.file("sounds/intro.ogg", audioData, { binary: true, compression: "STORE" });
       rpZip.file("sounds/sound_definitions.json", JSON.stringify({
         format_version: "1.20.20",
         sound_definitions: {
           "introaddon:cinematic_intro": {
             category: "music",
-            sounds: [{ name: "sounds/intro", stream: true, volume: 1.0, load_on_low_memory: true, is3D: false, allow_concurrent_streaming: true }]
+            sounds: [{ name: "sounds/intro", stream: true, volume: 1, load_on_low_memory: true, is3D: false, allow_concurrent_streaming: true }]
           }
         }
       }, null, 2));
-      
-      const scriptLines = [
-        'import { world, system, HudVisibility, HudElement } from "@minecraft/server";',
-        'import { ModalFormData } from "@minecraft/server-ui";',
-        "const CONFIG = " + JSON.stringify(config) + ";",
-        'const SOUND_ID = "introaddon:cinematic_intro";',
-        'let menuShown = false;',
-        'let menuPending = false;',
-        'let menuAttempts = 0;',
-        'let modeSelected = false;',
-        'let playbackMode = "per_player";',
-        'let minimumPlayers = 2;',
-        'let soundVolume = 1.0;',
-        'let groupSoundStarted = false;',
-        'function startIntro(player) { const ticks = Math.max(20, Math.ceil(Number(CONFIG.playback.durationSeconds || 5) * 20) + 12); const hidden = [HudElement.TouchControls, HudElement.Hotbar, HudElement.Crosshair, HudElement.Health, HudElement.Hunger, HudElement.Armor, HudElement.ProgressBar, HudElement.AirBubbles, HudElement.HorseHealth, HudElement.StatusEffects, HudElement.ItemText, HudElement.PaperDoll, HudElement.ToolTips]; try { player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, hidden); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudieron ocultar todos los controles: " + String(e)); } catch (_) {} } try { player.onScreenDisplay.setTitle("INTROADDON_START", { fadeInDuration: 0, stayDuration: ticks, fadeOutDuration: 0 }); } catch (e) { try { player.sendMessage("§cIntroAddon: no se pudo activar la pantalla de intro: " + String(e)); } catch (_) {} } let audioStarted = false; try { player.playSound(SOUND_ID, { volume: soundVolume, pitch: 1.0 }); audioStarted = true; } catch (apiError) { try { player.runCommand("playsound " + SOUND_ID + " @s ~ ~ ~ " + soundVolume + " 1"); audioStarted = true; } catch (commandError) { try { player.sendMessage("§cIntroAddon: no se pudo iniciar el audio. Comprueba que el pack de recursos esté activo y que sounds/intro.ogg exista. API: " + String(apiError) + " · playsound: " + String(commandError)); } catch (_) {} } } if (audioStarted) { try { player.sendMessage("§aIntroAddon: intro y audio iniciados."); } catch (_) {} } system.runTimeout(() => { try { player.onScreenDisplay.setHudVisibility(HudVisibility.Reset, hidden); } catch (_) {} }, ticks); }',
-        'function startGroupAudio() { const runId = system.runInterval(() => { const players = world.getAllPlayers(); if (!groupSoundStarted && players.length >= minimumPlayers) { groupSoundStarted = true; system.clearRun(runId); system.runTimeout(() => { for (const p of world.getAllPlayers()) startIntro(p); }, 40); } }, 20); }',
-        'async function showFirstPlayerMenu(player) {',
-        '  if (menuShown || menuPending || menuAttempts >= 3) return;',
-        '  menuPending = true; menuAttempts++;',
-        '  try {',
-        '    const form = new ModalFormData().title("IntroAddon - configuración").dropdown("Modo de reproducción", ["Individual - cada jugador al entrar", "Grupal - esperar al grupo"], 0).slider("Volumen de audio (%)", 0, 100, { valueStep: 5, defaultValue: 100 }).slider("Jugadores necesarios (modo grupal)", 1, 20, { valueStep: 1, defaultValue: 2 });',
-        '    const answer = await form.show(player);',
-        '    menuShown = true; menuPending = false;',
-        '    if (answer.canceled || !answer.formValues) { playbackMode = "per_player"; soundVolume = 1.0; minimumPlayers = 2; modeSelected = true; player.sendMessage("§eIntroAddon: se usarán los valores predeterminados."); system.runTimeout(() => startIntro(player), 40); return; }',
-        '    playbackMode = Number(answer.formValues[0]) === 0 ? "per_player" : "group_once";',
-        '    soundVolume = Math.max(0, Math.min(1, Number(answer.formValues[1]) / 100));',
-        '    minimumPlayers = Math.max(1, Math.min(20, Math.floor(Number(answer.formValues[2]) || 2)));',
-        '    modeSelected = true;',
-        '    player.sendMessage(playbackMode === "per_player" ? "§aIntroAddon: modo individual. El audio comenzará en breve." : "§aIntroAddon: modo grupal. Esperando a " + minimumPlayers + " jugador(es).");',
-        '    if (playbackMode === "per_player") system.runTimeout(() => startIntro(player), 40);',
-        '    else startGroupAudio();',
-        '  } catch (e) { menuPending = false; if (menuAttempts < 3) { system.runTimeout(() => showFirstPlayerMenu(player), 60); } else { menuShown = true; modeSelected = true; playbackMode = "per_player"; soundVolume = 1.0; try { player.sendMessage("§cIntroAddon: no se pudo abrir la configuración tras 3 intentos: " + String(e) + ". Se usará el modo individual."); } catch (_) {} system.runTimeout(() => startIntro(player), 40); } }',
-        '}',
-        'world.afterEvents.playerSpawn.subscribe((event) => { if (!event.initialSpawn) return; const player = event.player; system.runTimeout(() => { if (!menuShown) showFirstPlayerMenu(player); else if (modeSelected && playbackMode === "per_player") system.runTimeout(() => startIntro(player), 40); }, 20); });',
-        'system.runInterval(() => { if (menuShown) return; const players = world.getAllPlayers(); if (players.length > 0) showFirstPlayerMenu(players[0]); }, 40);'
-      ];
-      bpZip.file("scripts/main.js", scriptLines.join("\n"));
+
+      const scriptSource = `import { world, system, HudVisibility, HudElement } from "@minecraft/server";
+import { ModalFormData } from "@minecraft/server-ui";
+
+const SOUND_ID = "introaddon:cinematic_intro";
+const FPS = __FPS__;
+const TOTAL_FRAMES = __TOTAL_FRAMES__;
+const FRAMES_PER_SHEET = 4;
+const TOTAL_TICKS = Math.ceil(TOTAL_FRAMES * 20 / FPS) + 10;
+const HIDDEN = [HudElement.TouchControls, HudElement.Hotbar, HudElement.Crosshair, HudElement.Health, HudElement.Hunger, HudElement.Armor, HudElement.ProgressBar, HudElement.AirBubbles, HudElement.HorseHealth, HudElement.StatusEffects, HudElement.ItemText, HudElement.PaperDoll, HudElement.ToolTips];
+
+function getCfg() {
+  return {
+    configured: world.getDynamicProperty("ia_configured") === true,
+    mode: world.getDynamicProperty("ia_mode") === "group_once" ? "group_once" : "per_player",
+    volume: typeof world.getDynamicProperty("ia_volume") === "number" ? world.getDynamicProperty("ia_volume") : 1,
+    min: typeof world.getDynamicProperty("ia_min") === "number" ? world.getDynamicProperty("ia_min") : 2,
+  };
+}
+function saveCfg(mode, volume, min) {
+  world.setDynamicProperty("ia_configured", true);
+  world.setDynamicProperty("ia_mode", mode);
+  world.setDynamicProperty("ia_volume", volume);
+  world.setDynamicProperty("ia_min", min);
+}
+
+const playing = new Set();
+let groupStarted = false;
+let menuOpen = false;
+function pad3(n) { return String(n).padStart(3, "0"); }
+
+function startIntro(player) {
+  if (playing.has(player.id)) return;
+  playing.add(player.id);
+  const cfg = getCfg();
+  const opts = { fadeInDuration: 0, stayDuration: 30, fadeOutDuration: 0 };
+  try { player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, HIDDEN); } catch (e) {}
+  try { player.onScreenDisplay.setTitle("IA000F9", opts); } catch (e) {}
+  const startTick = system.currentTick + 10;
+  let soundDone = false, last = -1;
+  const id = system.runInterval(() => {
+    let valid = true;
+    try { valid = player.isValid; } catch (e) { valid = false; }
+    if (!valid) { system.clearRun(id); playing.delete(player.id); return; }
+    const t = system.currentTick - startTick;
+    if (t < 0) return;
+    if (!soundDone) {
+      soundDone = true;
+      try { player.playSound(SOUND_ID, { volume: cfg.volume, pitch: 1.0 }); }
+      catch (e) { try { player.runCommand("playsound " + SOUND_ID + " @s ~ ~ ~ " + cfg.volume + " 1"); } catch (e2) {} }
+    }
+    const frame = Math.floor(t * FPS / 20);
+    if (frame >= TOTAL_FRAMES) {
+      system.clearRun(id); playing.delete(player.id);
+      try { player.onScreenDisplay.clearTitle(); } catch (e) {}
+      try { player.onScreenDisplay.setHudVisibility(HudVisibility.Reset, HIDDEN); } catch (e) {}
+      return;
+    }
+    if (frame === last) return;
+    last = frame;
+    const sheet = Math.floor(frame / FRAMES_PER_SHEET) + 1;
+    const k = frame % FRAMES_PER_SHEET;
+    try { player.onScreenDisplay.setTitle("IA" + pad3(sheet) + "F" + k, opts); } catch (e) {}
+  }, 1);
+}
+
+function startGroupWatcher() {
+  if (groupStarted) return;
+  const id = system.runInterval(() => {
+    const cfg = getCfg();
+    if (world.getAllPlayers().length >= cfg.min) {
+      system.clearRun(id); groupStarted = true;
+      system.runTimeout(() => { for (const p of world.getAllPlayers()) startIntro(p); }, 40);
+    }
+  }, 20);
+}
+
+function showMenu(player, tries = 0) {
+  if (menuOpen) return;
+  menuOpen = true;
+  const cfg = getCfg();
+  const form = new ModalFormData()
+    .title("IntroAddon - configuración")
+    .dropdown("Modo de reproducción", ["Individual - cada jugador al entrar", "Grupal - esperar al grupo"], { defaultValueIndex: cfg.mode === "group_once" ? 1 : 0 })
+    .slider("Volumen de audio (%)", 0, 100, { valueStep: 5, defaultValue: Math.round(cfg.volume * 100) })
+    .slider("Jugadores necesarios (modo grupal)", 1, 20, { valueStep: 1, defaultValue: cfg.min })
+    .submitButton("Guardar y reproducir");
+  form.show(player).then((res) => {
+    menuOpen = false;
+    if (res.canceled) {
+      if (res.cancelationReason === "UserBusy" && tries < 60) {
+        system.runTimeout(() => { if (player.isValid) showMenu(player, tries + 1); }, 40);
+        return;
+      }
+      if (!cfg.configured) saveCfg("per_player", 1, 2);
+    } else {
+      const mode = Number(res.formValues[0]) === 1 ? "group_once" : "per_player";
+      saveCfg(mode, Math.max(0, Math.min(1, Number(res.formValues[1]) / 100)), Math.max(1, Math.floor(Number(res.formValues[2]) || 2)));
+    }
+    afterConfig(player);
+  }).catch((e) => {
+    menuOpen = false;
+    try { player.sendMessage("§cIntroAddon: error en el menú: " + String(e)); } catch (_) {}
+    if (tries < 5) system.runTimeout(() => { if (player.isValid) showMenu(player, tries + 1); }, 60);
+    else { if (!getCfg().configured) saveCfg("per_player", 1, 2); afterConfig(player); }
+  });
+}
+function afterConfig(player) {
+  const cfg = getCfg();
+  if (cfg.mode === "per_player") system.runTimeout(() => startIntro(player), 20);
+  else startGroupWatcher();
+}
+world.afterEvents.playerSpawn.subscribe((ev) => {
+  if (!ev.initialSpawn) return;
+  const player = ev.player;
+  system.runTimeout(() => {
+    if (!player.isValid) return;
+    const cfg = getCfg();
+    if (!cfg.configured) showMenu(player);
+    else if (cfg.mode === "per_player") startIntro(player);
+    else startGroupWatcher();
+  }, 60);
+});
+system.afterEvents.scriptEventReceive.subscribe((ev) => {
+  const p = ev.sourceEntity;
+  if (!p || p.typeId !== "minecraft:player") return;
+  if (ev.id === "introaddon:menu") showMenu(p);
+  else if (ev.id === "introaddon:play") startIntro(p);
+});
+`.replace("__FPS__", String(fps)).replace("__TOTAL_FRAMES__", String(totalFrames));
+      bpZip.file("scripts/main.js", scriptSource);
+      bpZip.file("README.txt", "Activa BP y RP. /scriptevent introaddon:menu = ajustes; introaddon:play = repetir intro.\\n");
       bpZip.file("introaddon_config.json", JSON.stringify(config, null, 2));
-      bpZip.file("README.txt", "Activa el pack de comportamiento y el pack de recursos. La UI visual empieza al cargar el HUD; el modo grupal solo puede retrasar el audio, no sincronizar el inicio visual de todos los clientes.\n");
       const [rpBytes, bpBytes] = await Promise.all([
         rpZip.generateAsync({ type: "uint8array", compression: "STORE" }),
         bpZip.generateAsync({ type: "uint8array", compression: "STORE" })
