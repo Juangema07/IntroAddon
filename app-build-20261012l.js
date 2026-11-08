@@ -95,7 +95,7 @@
   function autoConfigure() {
     if (!state.sourceWidth || !state.sourceHeight) return;
     const duration = state.duration || 0;
-    const fps = duration > 180 ? 12 : duration > 60 ? 15 : 24;
+    const fps = 30; // No reducir FPS por la duración: priorizar fluidez.
     $("fps").value = String(fps);
     const scale = Math.min(1, 640 / state.sourceWidth, 360 / state.sourceHeight);
     const round16 = n => Math.max(16, Math.min(1024, Math.round((n * scale) / 16) * 16));
@@ -368,7 +368,13 @@
           ]
         }});
       }
-      // Sin imagen superpuesta: los fotogramas se dibujan directamente sobre el HUD.
+      // Fondo negro opaco como en el pack de referencia: siempre debajo de los fotogramas.
+      const blackCanvas = document.createElement("canvas");
+      blackCanvas.width = 1; blackCanvas.height = 1;
+      const blackCtx = blackCanvas.getContext("2d");
+      blackCtx.fillStyle = "#000000"; blackCtx.fillRect(0, 0, 1, 1);
+      const blackBlob = await new Promise((resolve, reject) => blackCanvas.toBlob(v => v ? resolve(v) : reject(new Error("No se pudo crear el fondo negro.")), "image/png"));
+      rpZip.file("textures/ui/intro/black.png", blackBlob, { compression: "STORE" });
       for (let i = 0; i < sheetMeta.length; i++) {
         const sheet = sheetMeta[i];
         const pngBytes = await zip.file(sheet.filename).async("uint8array");
@@ -387,7 +393,14 @@
             { binding_name: "#hud_title_text_string" },
             { binding_type: "view", source_property_name: "(not ((#hud_title_text_string - 'IA') = #hud_title_text_string))", target_property_name: "#visible" }
           ],
-          controls: introControls
+          controls: [
+            { black_background: {
+              type: "image", texture: "textures/ui/intro/black",
+              size: ["100%", "100%"], keep_ratio: false,
+              anchor_from: "center", anchor_to: "center", layer: 1000001
+            }},
+            ...introControls
+          ]
         }
       }, null, 2));
       rpZip.file("sounds/intro.ogg", audioData, { binary: true, compression: "STORE" });
