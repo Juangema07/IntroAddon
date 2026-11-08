@@ -351,7 +351,7 @@
 
       // El título del HUD transporta hoja y fotograma, igual que en el pack de referencia funcional.
       const introControls = [];
-      const frameTokens = Array.from({ length: capacity }, (_, i) => "'F" + i + "'").join(" - ");
+      const frameTokens = Array.from({ length: capacity }, (_, i) => "'_F" + i + "_'").join(" - ");
       const textureExpression = "('textures/ui/intro/spritesheet_' + (#hud_title_text_string - 'IA' - " + frameTokens + "))";
       for (let frame = 0; frame < capacity; frame++) {
         const uvX = (frame % cols) * frameW;
@@ -451,7 +451,7 @@ function startIntro(player) {
   // El título lleva el identificador de hoja y celda que consume la UI de Bedrock.
   const opts = { fadeInDuration: 0, stayDuration: Math.max(1200, TOTAL_TICKS + 100), fadeOutDuration: 0 };
   try { player.onScreenDisplay.setHudVisibility(HudVisibility.Hide, HIDDEN); } catch (e) {}
-  try { player.onScreenDisplay.setTitle("IA001F0", opts); } catch (e) {}
+  try { player.onScreenDisplay.setTitle("IA001_F0_", opts); } catch (e) {}
   const startTick = system.currentTick + 30;
   let soundDone = false, last = -1;
   const id = system.runInterval(() => {
@@ -476,7 +476,7 @@ function startIntro(player) {
     last = frame;
     const sheet = Math.floor(frame / FRAMES_PER_SHEET) + 1;
     const k = frame % FRAMES_PER_SHEET;
-    try { player.onScreenDisplay.setTitle("IA" + pad3(sheet) + "F" + k, opts); } catch (e) {}
+    try { player.onScreenDisplay.setTitle("IA" + pad3(sheet) + "_F" + k + "_", opts); } catch (e) {}
   }, 1);
 }
 
